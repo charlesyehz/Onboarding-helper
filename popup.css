@@ -1,0 +1,309 @@
+/* ========== Fonts ========== */
+@font-face {
+  font-family: "Inter Zeller";
+  font-style: normal;
+  font-weight: 400;
+  src: url("fonts/InterZeller-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter Zeller";
+  font-style: normal;
+  font-weight: 500;
+  src: url("fonts/InterZeller-Medium.woff2") format("woff2");
+}
+
+/* ========== Base & Shared ========== */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: "Inter Zeller", Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-width: 320px;
+}
+
+/* Container, Cards, etc. can share base styles */
+.container {
+  padding: 1rem;
+}
+
+.card {
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  padding: 0 0 1rem;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+.card-header {
+  padding: 0.75rem 1rem;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.card-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+.icon-button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 0.25rem;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.icon-button:hover {
+  color: #0071ce;
+}
+
+/* Form-related */
+.form-group {
+  margin: 0.75rem 1rem;
+}
+.form-group label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-weight: bold;
+}
+.form-group input {
+  width: 100%;
+  padding: 0.5rem;
+  box-sizing: border-box;
+  border: 1px solid;
+  border-radius: 4px;
+  outline: none;
+}
+
+#email-status {
+  margin: 0.75rem 1rem;
+}
+
+#buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem;
+}
+/* Button styling */
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+button i {
+  font-size: 0.9rem;
+}
+
+.btn-primary {
+  padding: 0.5rem 1rem;
+  margin: 0.75rem 1rem;
+}
+
+.btn-outline {
+  padding: 0.5rem 1rem;
+  margin: 0.75rem 1rem;
+  background: transparent;
+  border: 1px solid #0071ce;
+}
+
+.btn-toggle {
+  background: transparent;
+  color: inherit;
+  margin-left: auto; /* pushes toggle button to the right */
+  font-size: 1.15rem;
+}
+
+.zeller-logo {
+  width: 40px;
+  height: auto;
+  margin-right: 0.5rem;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  position: relative;
+}
+
+/* Region Selector */
+.region-selector {
+  position: relative;
+  margin-left: auto;
+}
+
+.region-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid;
+  background: transparent;
+}
+
+.region-btn i {
+  font-size: 0.9rem;
+}
+
+.region-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: white;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  z-index: 1000;
+  min-width: 80px;
+}
+
+.region-option {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.region-option:hover {
+  background: #f0f0f0;
+}
+
+/* ========== Light Theme ========== */
+body.light-theme {
+  background-color: #f9f9f9;
+  color: #333;
+}
+
+body.light-theme .card {
+  background-color: #fff;
+}
+
+body.light-theme .card-header {
+  background-color: #eee;
+}
+
+body.light-theme .form-group input {
+  background-color: #fff;
+  border-color: #ccc;
+  color: #333;
+}
+
+body.light-theme .btn-primary {
+  background-color: #0071ce;
+  color: #fff;
+}
+body.light-theme .btn-primary:hover {
+  background-color: #005ba3;
+}
+
+body.light-theme .btn-outline {
+  color: #0071ce;
+  border-color: #0071ce;
+}
+body.light-theme .btn-outline:hover {
+  background-color: #f0f7ff;
+}
+
+body.light-theme .region-btn {
+  border-color: #ccc;
+  color: #333;
+}
+
+body.light-theme .region-btn:hover {
+  border-color: #0071ce;
+  color: #0071ce;
+}
+
+body.light-theme .region-dropdown {
+  background-color: #fff;
+  border: 1px solid #ccc;
+}
+
+body.light-theme .region-option {
+  color: #333;
+}
+
+body.light-theme .region-option:hover {
+  background-color: #f0f7ff;
+}
+
+/* ========== Dark Theme ========== */
+body.dark-theme {
+  background-color: #1a1a1a;
+  color: #f2f2f2;
+}
+
+body.dark-theme .card {
+  background-color: #2e2e2e;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
+}
+
+body.dark-theme .card-header {
+  background-color: #3a3a3a;
+}
+
+body.dark-theme .form-group input {
+  background-color: #1a1a1a;
+  border-color: #555;
+  color: #f2f2f2;
+}
+
+body.dark-theme .btn-primary {
+  background-color: #0071ce;
+  color: #fff;
+}
+body.dark-theme .btn-primary:hover {
+  background-color: #005ba3;
+}
+
+body.dark-theme .btn-outline {
+  color: #0071ce;
+  border-color: #0071ce;
+}
+body.dark-theme .btn-outline:hover {
+  background-color: rgba(0, 113, 206, 0.1);
+}
+
+body.dark-theme .region-btn {
+  border-color: #555;
+  color: #f2f2f2;
+}
+
+body.dark-theme .region-btn:hover {
+  border-color: #0071ce;
+  color: #0071ce;
+}
+
+body.dark-theme .region-dropdown {
+  background-color: #2e2e2e;
+  border: 1px solid #555;
+}
+
+body.dark-theme .region-option {
+  color: #f2f2f2;
+}
+
+body.dark-theme .region-option:hover {
+  background-color: rgba(0, 113, 206, 0.1);
+}

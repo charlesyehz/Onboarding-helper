@@ -1,0 +1,9 @@
+{
+  "name": "onboarding-form-autofill",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "lint": "web-ext lint --source-dir .",
+    "package": "mkdir -p dist && rm -f dist/onboarding-helper.zip && zip -r dist/onboarding-helper.zip manifest.json popup.html popup.css images src testlib.dom.umd.js -x \"*.DS_Store\""
+  }
+}

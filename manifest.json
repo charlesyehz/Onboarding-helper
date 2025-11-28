@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Zeller Onboarding helper",
+  "version": "1.0",
+  "description": "Zeller Onboarding helper",
+  "permissions": ["activeTab", "storage", "tabs", "scripting"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "src/background/router.js",
+    "type": "module"
+  },
+  "icons": {
+    "16": "images/zeller-logo.png",
+    "32": "images/zeller-logo.png",
+    "48": "images/zeller-logo.png",
+    "128": "images/zeller-logo.png"
+  },
+  "action": {
+    "default_icon": "images/zeller-logo.png",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*register-phone*",
+        "https://*/*register-phone*",
+        "http://*/*signup*",
+        "https://*/*signup*",
+        "http://*/*onboarding*",
+        "https://*/*onboarding*"
+      ],
+      "js": ["src/content/index.js"],
+      "type": "module"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/shared/domEvents.js",
+        "src/shared/storage.js",
+        "images/zeller-logo.png"
+      ],
+      "matches": ["http://*/*", "https://*/*"]
+    }
+  ]
+}
