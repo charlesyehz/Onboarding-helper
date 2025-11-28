@@ -1,15 +1,13 @@
 import {
   clearAutofillHistory,
   generateSignupEmail,
-  getLastGeneratedEmail,
-  getPhoneNumber,
-  loadEmailSettings,
+  loadPopupState,
   saveEmailSettings,
   savePhoneNumber,
 } from "../../shared/storage.js";
 import { getActiveTab } from "../../shared/tabs.js";
 
-export async function initEmailManager() {
+export async function initEmailManager(preloadedState = null) {
   const prefixInput = document.getElementById("email-prefix");
   const ticketInput = document.getElementById("ticket-number");
   const phoneInput = document.getElementById("phone-number");
@@ -18,14 +16,16 @@ export async function initEmailManager() {
   const generateButton = document.getElementById("generate-email-btn");
   const clearHistoryButton = document.getElementById("clear-history-btn");
 
-  const [settings, phoneNumber, lastEmail] = await Promise.all([
-    loadEmailSettings(),
-    getPhoneNumber(),
-    getLastGeneratedEmail(),
-  ]);
+  const state = preloadedState || (await loadPopupState());
+  const {
+    prefix = "",
+    ticketNumber = "",
+    phoneNumber = "",
+    lastEmail = "",
+  } = state || {};
 
-  prefixInput.value = settings.prefix;
-  ticketInput.value = settings.ticketNumber;
+  prefixInput.value = prefix;
+  ticketInput.value = ticketNumber;
   phoneInput.value = phoneNumber;
   renderLastEmail(lastEmailDisplay, lastEmail);
 
@@ -53,7 +53,6 @@ export async function initEmailManager() {
       ticketInput.value = "";
       phoneInput.value = "";
       renderLastEmail(lastEmailDisplay, "");
-      statusEl.textContent = "History cleared.";
     });
   }
 
@@ -86,7 +85,9 @@ export async function initEmailManager() {
 
     const fieldExists = results?.[0]?.result;
     if (!fieldExists) {
-      console.error("[Email Manager] Signup email field not found on page. Email not generated.");
+      console.error(
+        "[Email Manager] Signup email field not found on page. Email not generated."
+      );
       statusEl.textContent = "Signup email field not found on this page.";
       return;
     }
@@ -117,7 +118,9 @@ export async function initEmailManager() {
 
 function renderLastEmail(displayEl, email) {
   if (!displayEl) return;
-  displayEl.innerHTML = email ? `Last email:<br>${email}` : "No email generated yet";
+  displayEl.innerHTML = email
+    ? `Last email:<br>${email}`
+    : "No email generated yet";
 }
 
 function checkSignupEmailField() {

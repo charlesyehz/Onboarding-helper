@@ -19,19 +19,24 @@
     <div class="container">
       <header>
         <h2>ONB HELPER</h2>
-        <div class="region-selector">
-          <button id="region-btn" class="region-btn" title="Select Region">
-            <i class="fas fa-globe"></i>
-            <span id="current-region">AU</span>
-          </button>
-          <div
-            id="region-dropdown"
-            class="region-dropdown"
-            style="display: none"
-          >
-            <button class="region-option" data-region="AU">AU</button>
-            <button class="region-option" data-region="UK">UK</button>
+        <div style="display: flex; gap: 8px; align-items: center">
+          <div class="region-selector">
+            <button id="region-btn" class="region-btn" title="Select Region">
+              <i class="fas fa-globe"></i>
+              <span id="current-region">AU</span>
+            </button>
+            <div
+              id="region-dropdown"
+              class="region-dropdown"
+              style="display: none"
+            >
+              <button class="region-option" data-region="AU">AU</button>
+              <button class="region-option" data-region="UK">UK</button>
+            </div>
           </div>
+          <button id="settings-btn" class="icon-button" title="Settings">
+            <i class="fas fa-cog"></i>
+          </button>
         </div>
       </header>
 
@@ -111,7 +116,6 @@
         <p id="email-status"></p>
       </section>
     </div>
-
     <script type="module" src="src/popup/index.js"></script>
   </body>
 </html>

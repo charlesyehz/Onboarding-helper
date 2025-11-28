@@ -5,8 +5,43 @@
   ]);
 
   initPhoneAutofill(applyValue, storage.getPhoneNumber);
-  initSignupEmailWidget(applyValue, storage);
+
+  // Only init widget if enabled in settings
+  const isWidgetEnabled = await storage.isInlineWidgetEnabled();
+  if (isWidgetEnabled) {
+    initSignupEmailWidget(applyValue, storage);
+  }
+
+  // Listen for widget toggle changes
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type === "WIDGET_TOGGLED") {
+      // Reload the page to apply widget changes
+      window.location.reload();
+    }
+  });
 })();
+
+function initSettingsOverlayBridge() {
+  let overlayModulePromise = null;
+
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type !== "OPEN_SETTINGS_OVERLAY") {
+      return;
+    }
+
+    if (!overlayModulePromise) {
+      overlayModulePromise = import(
+        chrome.runtime.getURL("src/content/settingsOverlay.js")
+      );
+    }
+
+    overlayModulePromise
+      .then((module) => module.openSettingsOverlay())
+      .catch((error) =>
+        console.error("[Settings] Failed to open overlay", error)
+      );
+  });
+}
 
 function initPhoneAutofill(applyValue, getPhoneNumber) {
   const targetId = "phone";
@@ -57,59 +92,172 @@ function initPhoneAutofill(applyValue, getPhoneNumber) {
 }
 
 function initSignupEmailWidget(applyValue, storage) {
-  injectWidgetStyles();
+  const controller = createInlineWidgetController({
+    applyValue,
+    selectors: [
+      "#signup-email-input",
+      'input[id="email"]',
+      'input[name="email"]',
+      'input[type="email"]',
+      'input[id*="email"]',
+      'input[placeholder*="email"]',
+      'input[placeholder*="Email"]',
+    ],
+    generateSignupEmail: storage.generateSignupEmail,
+    isInlineWidgetEnabled: storage.isInlineWidgetEnabled,
+  });
 
-  const selectors = [
-    "#signup-email-input",
-    'input[id="email"]',
-    'input[name="email"]',
-    'input[type="email"]',
-    'input[id*="email"]',
-    'input[placeholder*="email"]',
-    'input[placeholder*="Email"]',
-  ];
+  controller
+    .init()
+    .catch((error) =>
+      console.error("[Prefill Widget] Failed to initialise", error)
+    );
+}
 
-  const findEmailField = () => {
+function createInlineWidgetController({
+  applyValue,
+  selectors,
+  generateSignupEmail,
+  isInlineWidgetEnabled,
+}) {
+  let observer = null;
+  let enabled = false;
+  const attachedWidgets = new Map();
+
+  const ensureBodyReady = (callback) => {
+    if (document.body) {
+      callback();
+      return;
+    }
+    document.addEventListener(
+      "DOMContentLoaded",
+      () => callback(),
+      { once: true }
+    );
+  };
+
+  const findNextEmailField = () => {
+    let fallback = null;
     for (const selector of selectors) {
-      const element = document.querySelector(selector);
-      if (element && element.type === "email") {
-        return element;
-      }
-      if (element) {
-        return element;
+      const candidates = document.querySelectorAll(selector);
+      for (const candidate of candidates) {
+        if (!(candidate instanceof HTMLElement)) {
+          continue;
+        }
+        if (attachedWidgets.has(candidate)) {
+          continue;
+        }
+        const type =
+          candidate instanceof HTMLInputElement
+            ? candidate.type
+            : candidate.getAttribute?.("type");
+        if (type === "hidden") {
+          continue;
+        }
+        if (type === "email") {
+          return candidate;
+        }
+        if (!fallback) {
+          fallback = candidate;
+        }
       }
     }
-    return null;
+    return fallback;
   };
 
   const attachWidgetIfNeeded = () => {
-    const emailField = findEmailField();
-    if (
-      !emailField ||
-      emailField.dataset.zellerWidgetAttached === "true" ||
-      emailField.type === "hidden"
-    ) {
+    if (!enabled) {
+      return;
+    }
+    const emailField = findNextEmailField();
+    if (!emailField) {
+      return;
+    }
+    if (emailField.dataset.zellerWidgetAttached === "true") {
       return;
     }
     emailField.dataset.zellerWidgetAttached = "true";
-    createEmailWidget(emailField, applyValue, storage.generateSignupEmail);
+    const cleanup = createEmailWidget(
+      emailField,
+      applyValue,
+      generateSignupEmail,
+      () => attachedWidgets.delete(emailField)
+    );
+    attachedWidgets.set(emailField, cleanup);
   };
 
-  attachWidgetIfNeeded();
-
   const startObserver = () => {
-    const observer = new MutationObserver(attachWidgetIfNeeded);
+    if (observer || !document.body) {
+      return;
+    }
+    observer = new MutationObserver(attachWidgetIfNeeded);
     observer.observe(document.body, { childList: true, subtree: true });
   };
 
-  if (document.body) {
-    startObserver();
-  } else {
-    document.addEventListener("DOMContentLoaded", () => {
+  const stopObserver = () => {
+    observer?.disconnect();
+    observer = null;
+  };
+
+  const enableWidget = () => {
+    injectWidgetStyles();
+    ensureBodyReady(() => {
       attachWidgetIfNeeded();
       startObserver();
     });
-  }
+  };
+
+  const teardownWidget = () => {
+    stopObserver();
+    attachedWidgets.forEach((cleanup) => cleanup());
+    attachedWidgets.clear();
+  };
+
+  const readDesiredState = async () => {
+    if (typeof isInlineWidgetEnabled === "function") {
+      try {
+        return await isInlineWidgetEnabled();
+      } catch (error) {
+        console.warn(
+          "[Prefill Widget] Unable to read inline widget toggle",
+          error
+        );
+      }
+    }
+    return true;
+  };
+
+  const refreshState = async (forcedValue) => {
+    const shouldEnable =
+      typeof forcedValue === "boolean" ? forcedValue : await readDesiredState();
+    if (shouldEnable === enabled) {
+      return;
+    }
+    enabled = shouldEnable;
+    if (enabled) {
+      enableWidget();
+    } else {
+      teardownWidget();
+    }
+  };
+
+  const handleMessage = (message) => {
+    if (
+      message?.type === "SETTINGS_UPDATED" &&
+      typeof message.payload?.inlineWidgetEnabled === "boolean"
+    ) {
+      refreshState(message.payload.inlineWidgetEnabled).catch((error) =>
+        console.error("[Prefill Widget] Failed to apply toggle", error)
+      );
+    }
+  };
+
+  const init = async () => {
+    await refreshState();
+    chrome.runtime.onMessage.addListener(handleMessage);
+  };
+
+  return { init };
 }
 
 function injectWidgetStyles() {
@@ -163,18 +311,6 @@ function injectWidgetStyles() {
       display: none;
       pointer-events: auto;
     }
-    .zeller-prefill-tooltip::before {
-      content: "";
-      position: absolute;
-      top: -6px;
-      right: 8px;
-      width: 12px;
-      height: 12px;
-      background: #ffffff;
-      border-top: 1px solid #e1e8ed;
-      border-left: 1px solid #e1e8ed;
-      transform: rotate(45deg);
-    }
     .zeller-prefill-tooltip button {
       width: 100%;
       background: #0071ce;
@@ -198,7 +334,12 @@ function injectWidgetStyles() {
   document.head.appendChild(style);
 }
 
-function createEmailWidget(field, applyValue, generateSignupEmail) {
+function createEmailWidget(
+  field,
+  applyValue,
+  generateSignupEmail,
+  onCleanup
+) {
   const container = document.createElement("div");
   container.className = "zeller-prefill-widget";
   container.setAttribute("data-open", "false");
@@ -287,9 +428,10 @@ function createEmailWidget(field, applyValue, generateSignupEmail) {
   };
 
   field.addEventListener("focus", showWidget);
-  field.addEventListener("blur", () => {
+  const blurHandler = () => {
     setTimeout(hideWidget, 200);
-  });
+  };
+  field.addEventListener("blur", blurHandler);
 
   const resizeObserver = new ResizeObserver(reposition);
   resizeObserver.observe(field);
@@ -325,14 +467,15 @@ function createEmailWidget(field, applyValue, generateSignupEmail) {
     }
   };
 
-  button.addEventListener("click", (event) => {
+  const badgeClickHandler = (event) => {
     event.stopPropagation();
     const isOpen = container.getAttribute("data-open") === "true";
     container.setAttribute("data-open", String(!isOpen));
     if (!isOpen) {
       container.classList.add("visible");
     }
-  });
+  };
+  button.addEventListener("click", badgeClickHandler);
 
   const outsideClickHandler = (event) => {
     if (!container.contains(event.target)) {
@@ -341,7 +484,7 @@ function createEmailWidget(field, applyValue, generateSignupEmail) {
   };
   document.addEventListener("click", outsideClickHandler, true);
 
-  actionButton.addEventListener("click", async (event) => {
+  const actionButtonHandler = async (event) => {
     event.stopPropagation();
     try {
       const { email, error } = await generateSignupEmail();
@@ -357,19 +500,40 @@ function createEmailWidget(field, applyValue, generateSignupEmail) {
       console.error("[Prefill Widget] Failed to generate email", err);
       hint.textContent = "Something went wrong. Try again.";
     }
-  });
+  };
+  actionButton.addEventListener("click", actionButtonHandler);
 
-  const cleanupObserver = new MutationObserver(() => {
+  let cleanupObserver;
+  let disposed = false;
+
+  const cleanup = () => {
+    if (disposed) {
+      return;
+    }
+    disposed = true;
+    field.removeEventListener("focus", showWidget);
+    field.removeEventListener("blur", blurHandler);
+    button.removeEventListener("click", badgeClickHandler);
+    actionButton.removeEventListener("click", actionButtonHandler);
+    window.removeEventListener("scroll", repositionHandler, true);
+    window.removeEventListener("resize", repositionHandler);
+    document.removeEventListener("click", outsideClickHandler, true);
+    resizeObserver.disconnect();
+    mutationObserver.disconnect();
+    cleanupObserver?.disconnect();
+    container.remove();
+    delete field.dataset.zellerWidgetAttached;
+    if (typeof onCleanup === "function") {
+      onCleanup();
+    }
+  };
+
+  cleanupObserver = new MutationObserver(() => {
     if (!document.body.contains(field)) {
-      resizeObserver.disconnect();
-      mutationObserver.disconnect();
-      window.removeEventListener("scroll", repositionHandler, true);
-      window.removeEventListener("resize", repositionHandler);
-      document.removeEventListener("click", outsideClickHandler, true);
-      container.remove();
-      cleanupObserver.disconnect();
+      cleanup();
     }
   });
 
   cleanupObserver.observe(document.body, { childList: true, subtree: true });
+  return cleanup;
 }

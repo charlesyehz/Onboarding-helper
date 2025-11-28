@@ -13,12 +13,9 @@ const LOGIN_SELECTORS = [
   'input[autocomplete="email"]',
 ];
 
-export async function initLoginHelper() {
+export function initLoginHelper() {
   const logBackInButton = document.getElementById("log-back-in-btn");
-  const lastEmailDisplay = document.getElementById("last-email-display");
   const statusEl = document.getElementById("email-status");
-
-  await renderLastEmail(lastEmailDisplay);
 
   logBackInButton.addEventListener("click", async () => {
     const email = await getLastGeneratedEmail();
@@ -41,11 +38,6 @@ export async function initLoginHelper() {
 
     statusEl.textContent = "Login email filled.";
   });
-}
-
-async function renderLastEmail(displayEl) {
-  const email = await getLastGeneratedEmail();
-  displayEl.innerHTML = email ? `Last email:<br>${email}` : "No email generated yet";
 }
 
 function fillLoginEmail(email, selectors) {

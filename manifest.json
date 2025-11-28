@@ -38,6 +38,11 @@
       "resources": [
         "src/shared/domEvents.js",
         "src/shared/storage.js",
+        "src/shared/routes.js",
+        "src/shared/tabs.js",
+        "src/shared/runtime.js",
+        "src/config/defaultSettings.js",
+        "src/config/routes.js",
         "images/zeller-logo.png"
       ],
       "matches": ["http://*/*", "https://*/*"]

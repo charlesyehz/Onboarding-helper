@@ -25,6 +25,21 @@ function handleRouteUpdate(tabId, url) {
   notifyTab(tabId, payload);
 }
 
+function broadcastSettingsUpdate(payload) {
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach((tab) => {
+      if (typeof tab.id !== "number") {
+        return;
+      }
+      chrome.tabs.sendMessage(
+        tab.id,
+        { type: "SETTINGS_UPDATED", payload },
+        () => chrome.runtime.lastError
+      );
+    });
+  });
+}
+
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url) {
     handleRouteUpdate(tabId, changeInfo.url);
@@ -48,6 +63,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse(snapshot);
     return true;
   }
+
+  if (message?.type === "SETTINGS_UPDATED") {
+    broadcastSettingsUpdate(message.payload);
+  }
+
   return false;
 });
 
