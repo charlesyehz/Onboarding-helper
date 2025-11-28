@@ -22,12 +22,8 @@
   "content_scripts": [
     {
       "matches": [
-        "http://*/*register-phone*",
-        "https://*/*register-phone*",
-        "http://*/*signup*",
-        "https://*/*signup*",
-        "http://*/*onboarding*",
-        "https://*/*onboarding*"
+        "http://*/*",
+        "https://*/*"
       ],
       "js": ["src/content/index.js"],
       "type": "module"
@@ -43,6 +39,7 @@
         "src/shared/runtime.js",
         "src/config/defaultSettings.js",
         "src/config/routes.js",
+        "src/config/widgetConfig.js",
         "images/zeller-logo.png"
       ],
       "matches": ["http://*/*", "https://*/*"]

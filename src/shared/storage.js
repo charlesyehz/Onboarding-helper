@@ -7,6 +7,7 @@ const LAST_EMAIL_KEY = "last-generated-email";
 const PHONE_NUMBER_KEY = "onboarding-phone-number";
 const SETTINGS_KEY = "extension-settings";
 const SETTINGS_MIGRATION_KEY = "settings-migrated-v1";
+const SELECTED_REGION_KEY = "selected-region";
 export const EMAIL_DOMAIN = "@myzeller.com";
 
 const ticketCounterKey = (ticketNumber) => `ticket-${ticketNumber}`;
@@ -397,4 +398,16 @@ function extractLegacyPersonas() {
     acc[route.id] = route.personas.map(clonePersona);
     return acc;
   }, {});
+}
+
+export async function getSelectedRegion() {
+  const result = await storageGet(SELECTED_REGION_KEY);
+  return result[SELECTED_REGION_KEY] || "AU"; // Default to AU
+}
+
+export async function saveSelectedRegion(region) {
+  if (!region || typeof region !== "string") {
+    return;
+  }
+  await storageSet({ [SELECTED_REGION_KEY]: region });
 }

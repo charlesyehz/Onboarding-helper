@@ -13,8 +13,8 @@ const auBusinessInfo = [
     ],
   },
   {
-    id: "sole-trader",
-    label: "Sole Trader",
+    id: "individual",
+    label: "Individual",
     fields: [
       {
         role: "textbox",
@@ -67,6 +67,17 @@ const auBusinessInfo = [
       },
     ],
   },
+  {
+    id: "not-supported",
+    label: "Not Supported",
+    fields: [
+      {
+        role: "textbox",
+        name: "ABN or ACN",
+        value: "49982967267",
+      },
+    ],
+  },
 ];
 
 const auKycShare = [
@@ -113,20 +124,81 @@ const auPassport = [
   },
 ];
 
-const ukBusinessInfo = [
+const auRegisteredAddress = [
   {
-    id: "uk-limited",
-    label: "UK Limited Company",
+    id: "arnold-dvs-address",
+    label: "Arnold DVStest",
     fields: [
-      { role: "textbox", name: "Company number", value: "08268716" },
+      {
+        role: "textbox",
+        name: "Address",
+        value: "190 Neerim Rd CARNEGIE VIC 3163",
+      },
     ],
   },
   {
-    id: "uk-sole-trader",
-    label: "UK Sole Trader",
+    id: "keli-cowey-address",
+    label: "Keli COWEY",
     fields: [
-      { role: "textbox", name: "Company number", value: "NI038482" },
+      {
+        role: "textbox",
+        name: "Address",
+        value: "100 ARTHUR STREET NORTH SYDNEY NSW 2060",
+      },
     ],
+  },
+];
+
+const auKycConfirm = [
+  {
+    id: "arnold-dvs-confirm",
+    label: "Arnold DVStest",
+    fields: [
+      { role: "textbox", name: "fullName", value: "Arnold DVStest" },
+      { role: "textbox", name: "firstName", value: "Arnold" },
+      { role: "textbox", name: "lastName", value: "DVStest" },
+      {
+        role: "textbox",
+        name: "Address",
+        value: "190 Neerim Rd CARNEGIE VIC 3163",
+      },
+      { role: "textbox", name: "dob", value: "01/09/1988" },
+      { role: "textbox", name: "documentNumber", value: "N1000091" },
+    ],
+  },
+  {
+    id: "keli-cowey-confirm",
+    label: "Keli COWEY",
+    fields: [
+      { role: "textbox", name: "fullName", value: "Keli COWEY" },
+      { role: "textbox", name: "First Name", value: "Keli" },
+      { role: "textbox", name: "Last Name", value: "COWEY" },
+      { role: "textbox", name: "dob", value: "25/03/1952" },
+      { role: "textbox", name: "documentNumber", value: "N1000093" },
+      {
+        role: "textbox",
+        name: "Address",
+        value: "100 ARTHUR STREET NORTH SYDNEY NSW 2060",
+      },
+    ],
+  },
+];
+
+const ukBusinessInfo = [
+  {
+    id: "uk-company",
+    label: "Company",
+    fields: [{ role: "textbox", name: "ABN or ACN", value: "01591116" }],
+  },
+  {
+    id: "uk-partnership",
+    label: "Partnership",
+    fields: [{ role: "textbox", name: "ABN or ACN", value: "OC304073" }],
+  },
+  {
+    id: "uk-trust",
+    label: "Trust",
+    fields: [{ role: "textbox", name: "ABN or ACN", value: "GE000124" }],
   },
 ];
 
@@ -174,6 +246,130 @@ const ukPassport = [
   },
 ];
 
+const ukRegisteredAddress = [
+  {
+    id: "olivia-west-address",
+    label: "Olivia West",
+    fields: [
+      {
+        role: "textbox",
+        name: "Address",
+        value: "42 High Street LONDON SW1A 1AA",
+      },
+    ],
+  },
+  {
+    id: "jacob-hughes-address",
+    label: "Jacob Hughes",
+    fields: [
+      {
+        role: "textbox",
+        name: "Address",
+        value: "10 Castle Terrace EDINBURGH EH1 2DP",
+      },
+    ],
+  },
+];
+
+const ukKycConfirm = [
+  {
+    id: "olivia-west-confirm",
+    label: "Olivia West",
+    fields: [
+      { role: "textbox", name: "fullName", value: "Olivia West" },
+      { role: "textbox", name: "dob", value: "12/03/1989" },
+      { role: "textbox", name: "documentNumber", value: "512499843" },
+    ],
+  },
+  {
+    id: "jacob-hughes-confirm",
+    label: "Jacob Hughes",
+    fields: [
+      { role: "textbox", name: "fullName", value: "Jacob Hughes" },
+      { role: "textbox", name: "dob", value: "08/11/1984" },
+      { role: "textbox", name: "documentNumber", value: "593822410" },
+    ],
+  },
+];
+
+const auAddMember = [
+  {
+    id: "arnold-dvs-member",
+    label: "Arnold DVStest",
+    fields: [
+      { role: "textbox", name: "firstName", value: "Arnold" },
+      { role: "textbox", name: "middleName", value: "James" },
+      { role: "textbox", name: "lastName", value: "DVStest" },
+      { role: "textbox", name: "dob", value: "01/09/1988" },
+      {
+        role: "textbox",
+        name: "street",
+        value: "190 Neerim Rd CARNEGIE VIC 3163",
+      },
+      {
+        role: "textbox",
+        name: "companyName",
+        value: "Arnold Advisory Pty Ltd",
+      },
+      { role: "textbox", name: "registrationNumber", value: "64123456789" },
+    ],
+  },
+  {
+    id: "keli-cowey-member",
+    label: "Keli COWEY",
+    fields: [
+      { role: "textbox", name: "firstName", value: "Keli" },
+      { role: "textbox", name: "middleName", value: "Anne" },
+      { role: "textbox", name: "lastName", value: "COWEY" },
+      { role: "textbox", name: "dob", value: "25/03/1952" },
+      {
+        role: "textbox",
+        name: "street",
+        value: "100 ARTHUR STREET NORTH SYDNEY NSW 2060",
+      },
+      { role: "textbox", name: "companyName", value: "Cowey & Co Holdings" },
+      { role: "textbox", name: "registrationNumber", value: "23670894512" },
+    ],
+  },
+];
+
+const ukAddMember = [
+  {
+    id: "olivia-west-member",
+    label: "Olivia West",
+    fields: [
+      { role: "textbox", name: "firstName", value: "Olivia" },
+      { role: "textbox", name: "middleName", value: "Rose" },
+      { role: "textbox", name: "lastName", value: "West" },
+      { role: "textbox", name: "dob", value: "12/03/1989" },
+      {
+        role: "textbox",
+        name: "street",
+        value: "42 High Street LONDON SW1A 1AA",
+      },
+      { role: "textbox", name: "companyName", value: "West Consulting Ltd" },
+      { role: "textbox", name: "registrationNumber", value: "OC304073" },
+    ],
+  },
+  {
+    id: "jacob-hughes-member",
+    label: "Jacob Hughes",
+    fields: [
+      { role: "textbox", name: "firstName", value: "Jacob" },
+      { role: "textbox", name: "middleName", value: "William" },
+      { role: "textbox", name: "lastName", value: "Hughes" },
+      { role: "textbox", name: "dob", value: "08/11/1984" },
+      {
+        role: "textbox",
+        name: "street",
+        value: "10 Castle Terrace EDINBURGH EH1 2DP",
+      },
+      { role: "textbox", name: "companyName", value: "Hughes Trading LLP" },
+      { role: "textbox", name: "registrationNumber", value: "GE000124" },
+    ],
+  },
+];
+
 const ukRegisterPhone = [];
 
 export const DEFAULT_SETTINGS = {
@@ -184,12 +380,18 @@ export const DEFAULT_SETTINGS = {
       "business-info": auBusinessInfo,
       "kyc-share-info": auKycShare,
       "kyc-passport": auPassport,
+      "kyc-confirm-details": auKycConfirm,
+      "registered-office-address": auRegisteredAddress,
+      "add-member": auAddMember,
       "register-phone": [],
     },
     UK: {
       "business-info": ukBusinessInfo,
       "kyc-share-info": ukKycShare,
       "kyc-passport": ukPassport,
+      "kyc-confirm-details": ukKycConfirm,
+      "registered-office-address": ukRegisteredAddress,
+      "add-member": ukAddMember,
       "register-phone": ukRegisterPhone,
     },
   },

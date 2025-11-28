@@ -5,10 +5,28 @@ import {
   getPersonasByRegion,
   savePersonas,
 } from "../shared/storage.js";
+import { ROUTES } from "../config/routes.js";
+
+const ROUTE_TAB_ORDER = [
+  "registered-office-address",
+  "business-info",
+  "add-member",
+  "kyc-confirm-details",
+  "kyc-share-info",
+  "kyc-passport",
+];
 
 // State
 let currentRegion = "AU";
-let currentRoute = "business-info";
+const ROUTE_OPTIONS = ROUTE_TAB_ORDER.reduce((list, routeId) => {
+  const route = ROUTES.find((item) => item.id === routeId);
+  if (route && Array.isArray(route.fieldSchema) && route.fieldSchema.length) {
+    list.push(route);
+  }
+  return list;
+}, []);
+let currentRoute =
+  ROUTE_OPTIONS[0]?.id || ROUTE_TAB_ORDER[0] || "business-info";
 let editingPersona = null;
 
 // Initialize
@@ -107,25 +125,56 @@ function initRegionTabs() {
 }
 
 function initRouteTabs() {
-  const routeTabs = document.querySelectorAll(".route-tab");
+  const container = document.getElementById("route-tabs");
+  if (!container) {
+    return;
+  }
 
-  routeTabs.forEach((tab) => {
+  container.innerHTML = "";
+
+  if (!ROUTE_OPTIONS.length) {
+    container.innerHTML =
+      '<p class="empty-state">No persona routes are available.</p>';
+    return;
+  }
+
+  if (!ROUTE_OPTIONS.some((route) => route.id === currentRoute)) {
+    currentRoute = ROUTE_OPTIONS[0].id;
+  }
+
+  ROUTE_OPTIONS.forEach((route) => {
+    const tab = document.createElement("button");
+    tab.className = "route-tab";
+    tab.dataset.route = route.id;
+    tab.textContent = route.title || route.id;
+
     tab.addEventListener("click", () => {
-      const route = tab.dataset.route;
-      currentRoute = route;
-
-      // Update active state
-      routeTabs.forEach((t) => t.classList.remove("active"));
-      tab.classList.add("active");
-
-      // Update title
-      const title = document.getElementById("personas-title");
-      title.textContent = `${tab.textContent.trim()} Personas`;
-
-      // Reload personas for new route
+      if (currentRoute === route.id) {
+        return;
+      }
+      currentRoute = route.id;
+      updateRouteTabState();
       loadPersonas();
     });
+
+    container.appendChild(tab);
   });
+
+  updateRouteTabState();
+}
+
+function updateRouteTabState() {
+  const routeTabs = document.querySelectorAll(".route-tab");
+  routeTabs.forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.route === currentRoute);
+  });
+
+  const route = ROUTE_OPTIONS.find((item) => item.id === currentRoute);
+  const title = document.getElementById("personas-title");
+
+  if (route && title) {
+    title.textContent = `${route.title} Personas`;
+  }
 }
 
 function initAddPersona() {
@@ -434,38 +483,11 @@ async function deletePersona() {
 // ============================================================================
 
 function getFieldSchemaForRoute(routeId) {
-  const schemas = {
-    "business-info": [
-      {
-        role: "textbox",
-        name: "ABN or ACN",
-        placeholder: "e.g., 26 004 139 397",
-      },
-    ],
-    "kyc-share-info": [
-      { role: "textbox", name: "First Name", placeholder: "e.g., John" },
-      { role: "textbox", name: "Last Name", placeholder: "e.g., Doe" },
-      {
-        role: "textbox",
-        name: "Date of birth",
-        placeholder: "e.g., 01/01/1990",
-      },
-      {
-        role: "textbox",
-        name: "Address",
-        placeholder: "e.g., 123 Main St SYDNEY NSW 2000",
-      },
-    ],
-    "kyc-passport": [
-      {
-        role: "textbox",
-        name: "Document number",
-        placeholder: "e.g., N1000091",
-      },
-    ],
-  };
-
-  return schemas[routeId] || [];
+  const route = ROUTES.find((item) => item.id === routeId);
+  if (!route || !Array.isArray(route.fieldSchema)) {
+    return [];
+  }
+  return route.fieldSchema.map((field) => ({ ...field }));
 }
 
 function generatePersonaId(label) {

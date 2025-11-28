@@ -52,7 +52,7 @@
             <div class="setting-group">
               <div class="setting-item">
                 <div class="setting-info">
-                  <h3>Inline Widget</h3>
+                  <h3>Inline Autofill Widget</h3>
                   <p>
                     Show sparkle icon next to input fields for quick prefill
                   </p>
@@ -100,22 +100,14 @@
             </div>
 
             <!-- Route Tabs -->
-            <div class="route-tabs">
-              <button class="route-tab active" data-route="business-info">
-                Registration Number
-              </button>
-              <button class="route-tab" data-route="kyc-share-info">
-                KYC Information
-              </button>
-              <button class="route-tab" data-route="kyc-passport">
-                Passport
-              </button>
+            <div class="route-tabs" id="route-tabs">
+              <!-- Route tabs rendered dynamically -->
             </div>
 
             <!-- Personas List -->
             <div class="personas-container">
               <div class="personas-header">
-                <h3 id="personas-title">Entity Registration Number</h3>
+                <h3 id="personas-title">Personas</h3>
                 <button class="btn-primary" id="add-persona-btn">
                   <i class="fas fa-plus"></i>
                   Add Item

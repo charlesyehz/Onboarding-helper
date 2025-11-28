@@ -1,4 +1,5 @@
-const REGION_STORAGE_KEY = "selected-region";
+import { getSelectedRegion, saveSelectedRegion } from "../../shared/storage.js";
+
 const DEFAULT_REGION = "AU";
 const REGION_FLAGS = {
   AU: "🇦🇺",
@@ -6,7 +7,7 @@ const REGION_FLAGS = {
 };
 const FALLBACK_FLAG = "🌍";
 
-export function initRegionSelector() {
+export async function initRegionSelector() {
   const regionBtn = document.getElementById("region-btn");
   const regionDropdown = document.getElementById("region-dropdown");
   const currentRegionSpan = document.getElementById("current-region");
@@ -14,7 +15,7 @@ export function initRegionSelector() {
   const regionOptions = document.querySelectorAll(".region-option");
 
   // Load saved region
-  const savedRegion = localStorage.getItem(REGION_STORAGE_KEY) || DEFAULT_REGION;
+  const savedRegion = await getSelectedRegion();
   setCurrentRegionDisplay(savedRegion);
 
   // Toggle dropdown
@@ -26,13 +27,13 @@ export function initRegionSelector() {
 
   // Select region
   regionOptions.forEach((option) => {
-    option.addEventListener("click", () => {
+    option.addEventListener("click", async () => {
       const selectedRegion = option.dataset.region;
       if (!selectedRegion) {
         return;
       }
       setCurrentRegionDisplay(selectedRegion);
-      localStorage.setItem(REGION_STORAGE_KEY, selectedRegion);
+      await saveSelectedRegion(selectedRegion);
       regionDropdown.style.display = "none";
 
       // Dispatch custom event for other components to react to region change
@@ -55,8 +56,4 @@ export function initRegionSelector() {
       currentRegionFlag.textContent = REGION_FLAGS[region] || FALLBACK_FLAG;
     }
   }
-}
-
-export function getSelectedRegion() {
-  return localStorage.getItem(REGION_STORAGE_KEY) || DEFAULT_REGION;
 }

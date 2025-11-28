@@ -5,9 +5,28 @@ export function normalizePath(pathname = "") {
   return pathname.startsWith("/") ? pathname : `/${pathname}`;
 }
 
+function doesRoutePathMatch(routePath, normalized) {
+  if (!routePath) {
+    return false;
+  }
+  const normalizedRoute = normalizePath(routePath);
+  if (!normalizedRoute.includes("*")) {
+    return normalizedRoute === normalized;
+  }
+  const escaped = normalizedRoute.replace(/[-/\\^$+?.()|[\]{}]/g, "\\$&");
+  const pattern = escaped.replace(/\*/g, "[^/]+");
+  const matcher = new RegExp(`^${pattern}$`);
+  return matcher.test(normalized);
+}
+
 export function matchRoute(pathname = "") {
   const normalized = normalizePath(pathname);
-  return ROUTES.find((route) => route.path === normalized) || null;
+  return (
+    ROUTES.find((route) => {
+      const paths = [route.path, ...(route.altPaths || [])].filter(Boolean);
+      return paths.some((routePath) => doesRoutePathMatch(routePath, normalized));
+    }) || null
+  );
 }
 
 export function buildRoutePayload(urlString) {

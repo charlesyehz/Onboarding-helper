@@ -1,16 +1,49 @@
 (async function initContentFeatures() {
-  const [{ applyValue }, storage] = await Promise.all([
+  const [{ applyValue }, storage, widgetConfig] = await Promise.all([
     import(chrome.runtime.getURL("src/shared/domEvents.js")),
     import(chrome.runtime.getURL("src/shared/storage.js")),
+    import(chrome.runtime.getURL("src/config/widgetConfig.js")),
   ]);
 
-  initPhoneAutofill(applyValue, storage.getPhoneNumber);
+  // Track active widget controllers so we can clean them up on route change
+  let activeControllers = [];
 
-  // Only init widget if enabled in settings
-  const isWidgetEnabled = await storage.isInlineWidgetEnabled();
-  if (isWidgetEnabled) {
-    initSignupEmailWidget(applyValue, storage);
-  }
+  // Function to initialize widgets for current route
+  const initWidgetsForCurrentRoute = async () => {
+    if (!chrome.runtime?.id) {
+      console.warn(
+        "[Widget] Extension context invalidated - please refresh the page"
+      );
+      return;
+    }
+
+    try {
+      activeControllers.forEach((controller) => {
+        if (controller.cleanup) {
+          controller.cleanup();
+        }
+      });
+      activeControllers = [];
+
+      const isWidgetEnabled = await storage.isInlineWidgetEnabled();
+
+      if (isWidgetEnabled) {
+        const controllers = await initUniversalWidget(
+          applyValue,
+          storage,
+          widgetConfig
+        );
+        if (controllers && Array.isArray(controllers)) {
+          activeControllers = controllers;
+        }
+      }
+    } catch (error) {
+      console.error("[Widget] Failed to initialize widgets:", error);
+    }
+  };
+
+  // Initialize widgets on first load
+  await initWidgetsForCurrentRoute();
 
   // Listen for widget toggle changes
   chrome.runtime.onMessage.addListener((message) => {
@@ -19,6 +52,50 @@
       window.location.reload();
     }
   });
+
+  // Listen for URL changes in single-page applications
+  let lastPathname = window.location.pathname;
+
+  // Function to handle route changes
+  const handleRouteChange = async () => {
+    try {
+      const currentPathname = window.location.pathname;
+      if (currentPathname !== lastPathname) {
+        lastPathname = currentPathname;
+
+        // Re-initialize widgets for new route
+        await initWidgetsForCurrentRoute();
+      }
+    } catch (error) {
+      console.error("[Widget] handleRouteChange error:", error);
+    }
+  };
+
+  // Method 1: Listen for popstate (back/forward navigation)
+  window.addEventListener("popstate", handleRouteChange);
+
+  // Method 2: Intercept pushState and replaceState for SPA navigation
+  const originalPushState = history.pushState;
+  const originalReplaceState = history.replaceState;
+
+  history.pushState = function (...args) {
+    originalPushState.apply(this, args);
+    handleRouteChange();
+  };
+
+  history.replaceState = function (...args) {
+    originalReplaceState.apply(this, args);
+    handleRouteChange();
+  };
+
+  // Method 3: Listen for hashchange
+  window.addEventListener("hashchange", handleRouteChange);
+
+  // Method 4: Polling fallback - check URL every 500ms
+  // This catches navigation that doesn't trigger the above events
+  setInterval(() => {
+    handleRouteChange();
+  }, 500);
 })();
 
 function initSettingsOverlayBridge() {
@@ -43,82 +120,120 @@ function initSettingsOverlayBridge() {
   });
 }
 
-function initPhoneAutofill(applyValue, getPhoneNumber) {
-  const targetId = "phone";
-  const DEFAULT_PHONE = "0423105719";
-
-  async function fillPhoneInput() {
-    const phoneInput = document.getElementById(targetId);
-    if (!phoneInput) {
-      return false;
-    }
-
-    const storedNumber = (await getPhoneNumber()) || DEFAULT_PHONE;
-    applyValue(phoneInput, storedNumber, { triggerFocus: false });
-    console.log(`[Autofill] Phone input populated with ${storedNumber}`);
-    return true;
+async function initUniversalWidget(applyValue, storage, widgetConfig) {
+  const currentRoute = widgetConfig.detectRoute(window.location.pathname);
+  if (!currentRoute) {
+    return [];
   }
 
-  function watchForPhoneField() {
-    const observer = new MutationObserver(async () => {
-      if (await fillPhoneInput()) {
-        observer.disconnect();
-      }
+  const routeConfig = widgetConfig.getRouteConfig(currentRoute);
+  if (!routeConfig || !routeConfig.fields) {
+    return [];
+  }
+
+  const currentRegion = await storage.getSelectedRegion();
+
+  const controllers = [];
+  for (const fieldConfig of routeConfig.fields) {
+    const controller = createUniversalWidgetController({
+      applyValue,
+      storage,
+      fieldConfig,
+      routeId: currentRoute,
+      region: currentRegion,
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
-    setTimeout(() => observer.disconnect(), 10000);
+    try {
+      await controller.init();
+      controllers.push(controller);
+    } catch (error) {
+      console.error("[Widget] Failed to initialize", error);
+    }
   }
 
-  async function start() {
-    if (await fillPhoneInput()) return;
-    watchForPhoneField();
+  return controllers;
+}
+
+const escapeAttributeValue = (value = "") => {
+  if (typeof window !== "undefined" && window.CSS?.escape) {
+    return window.CSS.escape(value);
+  }
+  return value.replace(/(["\\])/g, "\\$1");
+};
+
+function locateFieldByKey(key) {
+  if (!key) {
+    return null;
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start);
-  } else {
-    start();
+  const normalized = key.trim();
+  if (!normalized) {
+    return null;
   }
 
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message?.type === "ROUTE_UPDATED") {
-      const pathname = message.payload?.pathname || "";
-      if (pathname.includes("register-phone")) {
-        start();
+  const escaped = escapeAttributeValue(normalized);
+  const directSelectors = [
+    `#${escaped}`,
+    `input[name="${escaped}"]`,
+    `select[name="${escaped}"]`,
+    `textarea[name="${escaped}"]`,
+  ];
+
+  for (const selector of directSelectors) {
+    const element = document.querySelector(selector);
+    if (element) {
+      return element;
+    }
+  }
+
+  const fallbackSelectors = [
+    `input[name$=".${escaped}"]`,
+    `select[name$=".${escaped}"]`,
+    `textarea[name$=".${escaped}"]`,
+    `input[name*="${escaped}"]`,
+    `select[name*="${escaped}"]`,
+    `textarea[name*="${escaped}"]`,
+    `input[id$="${escaped}"]`,
+    `select[id$="${escaped}"]`,
+    `textarea[id$="${escaped}"]`,
+  ];
+
+  for (const selector of fallbackSelectors) {
+    const element = document.querySelector(selector);
+    if (element) {
+      return element;
+    }
+  }
+
+  const lowerKey = normalized.toLowerCase();
+  const labelledField = Array.from(document.querySelectorAll("label")).find(
+    (label) => label.textContent.trim().toLowerCase() === lowerKey
+  );
+
+  if (labelledField) {
+    const forId = labelledField.getAttribute("for");
+    if (forId) {
+      const element = document.getElementById(forId);
+      if (element) {
+        return element;
+      }
+    } else {
+      const element = labelledField.querySelector("input, select, textarea");
+      if (element) {
+        return element;
       }
     }
-  });
+  }
+
+  return null;
 }
 
-function initSignupEmailWidget(applyValue, storage) {
-  const controller = createInlineWidgetController({
-    applyValue,
-    selectors: [
-      "#signup-email-input",
-      'input[id="email"]',
-      'input[name="email"]',
-      'input[type="email"]',
-      'input[id*="email"]',
-      'input[placeholder*="email"]',
-      'input[placeholder*="Email"]',
-    ],
-    generateSignupEmail: storage.generateSignupEmail,
-    isInlineWidgetEnabled: storage.isInlineWidgetEnabled,
-  });
-
-  controller
-    .init()
-    .catch((error) =>
-      console.error("[Prefill Widget] Failed to initialise", error)
-    );
-}
-
-function createInlineWidgetController({
+function createUniversalWidgetController({
   applyValue,
-  selectors,
-  generateSignupEmail,
-  isInlineWidgetEnabled,
+  storage,
+  fieldConfig,
+  routeId,
+  region,
 }) {
   let observer = null;
   let enabled = false;
@@ -129,16 +244,13 @@ function createInlineWidgetController({
       callback();
       return;
     }
-    document.addEventListener(
-      "DOMContentLoaded",
-      () => callback(),
-      { once: true }
-    );
+    document.addEventListener("DOMContentLoaded", () => callback(), {
+      once: true,
+    });
   };
 
-  const findNextEmailField = () => {
-    let fallback = null;
-    for (const selector of selectors) {
+  const findNextField = () => {
+    for (const selector of fieldConfig.selectors) {
       const candidates = document.querySelectorAll(selector);
       for (const candidate of candidates) {
         if (!(candidate instanceof HTMLElement)) {
@@ -154,36 +266,34 @@ function createInlineWidgetController({
         if (type === "hidden") {
           continue;
         }
-        if (type === "email") {
-          return candidate;
-        }
-        if (!fallback) {
-          fallback = candidate;
-        }
+        return candidate;
       }
     }
-    return fallback;
+    return null;
   };
 
   const attachWidgetIfNeeded = () => {
     if (!enabled) {
       return;
     }
-    const emailField = findNextEmailField();
-    if (!emailField) {
+    const field = findNextField();
+    if (!field) {
       return;
     }
-    if (emailField.dataset.zellerWidgetAttached === "true") {
+    if (field.dataset.zellerWidgetAttached === "true") {
       return;
     }
-    emailField.dataset.zellerWidgetAttached = "true";
-    const cleanup = createEmailWidget(
-      emailField,
+    field.dataset.zellerWidgetAttached = "true";
+    const cleanup = createUniversalWidget(
+      field,
       applyValue,
-      generateSignupEmail,
-      () => attachedWidgets.delete(emailField)
+      storage,
+      fieldConfig,
+      routeId,
+      region,
+      () => attachedWidgets.delete(field)
     );
-    attachedWidgets.set(emailField, cleanup);
+    attachedWidgets.set(field, cleanup);
   };
 
   const startObserver = () => {
@@ -214,14 +324,11 @@ function createInlineWidgetController({
   };
 
   const readDesiredState = async () => {
-    if (typeof isInlineWidgetEnabled === "function") {
+    if (typeof storage.isInlineWidgetEnabled === "function") {
       try {
-        return await isInlineWidgetEnabled();
+        return await storage.isInlineWidgetEnabled();
       } catch (error) {
-        console.warn(
-          "[Prefill Widget] Unable to read inline widget toggle",
-          error
-        );
+        console.warn("[Widget] Unable to read inline widget toggle", error);
       }
     }
     return true;
@@ -252,12 +359,17 @@ function createInlineWidgetController({
     }
   };
 
+  const cleanup = () => {
+    teardownWidget();
+    chrome.runtime.onMessage.removeListener(handleMessage);
+  };
+
   const init = async () => {
     await refreshState();
     chrome.runtime.onMessage.addListener(handleMessage);
   };
 
-  return { init };
+  return { init, cleanup };
 }
 
 function injectWidgetStyles() {
@@ -284,6 +396,7 @@ function injectWidgetStyles() {
       border-radius: 4px;
       border: none;
       background: #000000;
+      color: #000000;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -293,10 +406,11 @@ function injectWidgetStyles() {
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
     .zeller-prefill-badge::before {
-      content: "✨";
+      content: "👀";
       font-size: 12px;
       line-height: 1;
-      filter: brightness(0) invert(1);
+      color: ##fff;
+
     }
     .zeller-prefill-tooltip {
       position: absolute;
@@ -310,6 +424,47 @@ function injectWidgetStyles() {
       padding: 0.5rem;
       display: none;
       pointer-events: auto;
+    }
+    .tooltip-label {
+      display: block;
+      margin-bottom: 0.5rem;
+      color: #333;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    .persona-select {
+      width: 100%;
+      padding: 0.5rem;
+      margin-bottom: 0.75rem;
+      background: #fff;
+      border: 1px solid #e1e8ed;
+      border-radius: 4px;
+      color: #333;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .persona-select:focus {
+      outline: none;
+      border-color: #0071ce;
+    }
+    .tooltip-action-btn {
+      width: 100%;
+      background: #0071ce;
+      border: none;
+      border-radius: 4px;
+      color: #ffffff;
+      font-size: 0.875rem;
+      padding: 0.5rem;
+      cursor: pointer;
+    }
+    .tooltip-action-btn:hover {
+      background: #005ba8;
+    }
+    .tooltip-hint {
+      margin: 0.5rem 0 0;
+      font-size: 0.75rem;
+      color: #5c6c7d;
+      line-height: 1.2;
     }
     .zeller-prefill-tooltip button {
       width: 100%;
@@ -334,10 +489,13 @@ function injectWidgetStyles() {
   document.head.appendChild(style);
 }
 
-function createEmailWidget(
+async function createUniversalWidget(
   field,
   applyValue,
-  generateSignupEmail,
+  storage,
+  fieldConfig,
+  routeId,
+  region,
   onCleanup
 ) {
   const container = document.createElement("div");
@@ -347,47 +505,191 @@ function createEmailWidget(
   const button = document.createElement("button");
   button.type = "button";
   button.className = "zeller-prefill-badge";
-  button.title = "Prefill email";
+  button.title = fieldConfig.buttonLabel || "Prefill";
 
   const tooltip = document.createElement("div");
   tooltip.className = "zeller-prefill-tooltip";
 
-  const actionButton = document.createElement("button");
-  actionButton.type = "button";
-  actionButton.textContent = "Prefill email";
+  // Build tooltip content based on widget type
+  let actionButton, hint, personaSelect;
 
-  const hint = document.createElement("p");
-  hint.textContent = "Uses your saved prefix + ticket.";
+  if (fieldConfig.widgetType === "persona-select") {
+    // Persona selection dropdown - will be populated when tooltip opens
+    const label = document.createElement("label");
+    label.textContent = fieldConfig.tooltipLabel || "Select:";
+    label.className = "tooltip-label";
 
-  tooltip.appendChild(actionButton);
-  tooltip.appendChild(hint);
+    // Dropdown
+    personaSelect = document.createElement("select");
+    personaSelect.className = "persona-select";
+
+    // Action button
+    actionButton = document.createElement("button");
+    actionButton.type = "button";
+    actionButton.textContent = fieldConfig.buttonLabel;
+    actionButton.className = "tooltip-action-btn";
+
+    tooltip.appendChild(label);
+    tooltip.appendChild(personaSelect);
+    tooltip.appendChild(actionButton);
+  } else {
+    // Simple button (email, phone)
+    actionButton = document.createElement("button");
+    actionButton.type = "button";
+    actionButton.textContent = fieldConfig.buttonLabel;
+    actionButton.className = "tooltip-action-btn";
+
+    tooltip.appendChild(actionButton);
+
+    if (fieldConfig.hintText) {
+      hint = document.createElement("p");
+      hint.textContent = fieldConfig.hintText;
+      hint.className = "tooltip-hint";
+      tooltip.appendChild(hint);
+    }
+  }
 
   container.appendChild(button);
   container.appendChild(tooltip);
   document.body.appendChild(container);
 
-  const BADGE_SIZE = 20;
-  const DEFAULT_RIGHT_OFFSET = 10;
-  const SMART_STACK_OFFSET = 40;
+  const executedPrefillActions = new Set();
+  const delay = (ms = 0) =>
+    new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
 
-  // Detect if there are conflicting icons (like password managers)
-  const hasConflictingIcons = () => {
-    const rect = field.getBoundingClientRect();
-    const rightEdge = rect.right - DEFAULT_RIGHT_OFFSET - BADGE_SIZE;
+  const normalizeFieldKey = (key = "") =>
+    typeof key === "string" ? key.trim().toLowerCase().replace(/\s+/g, "") : "";
 
-    // Check for elements at the default position
-    const elementsAtPosition = document.elementsFromPoint(
-      rightEdge,
-      rect.top + rect.height / 2
+  const shouldTriggerPrefillAction = (action, normalizedKey) => {
+    if (!Array.isArray(action?.fields) || !normalizedKey) {
+      return false;
+    }
+    return action.fields.some(
+      (fieldName) => normalizeFieldKey(fieldName) === normalizedKey
     );
-
-    // Filter out our own widget and the input field
-    const conflicts = elementsAtPosition.filter(
-      (el) => el !== field && el !== container && !container.contains(el)
-    );
-
-    return conflicts.length > 0;
   };
+
+  const findPrefillActionTrigger = (action = {}) => {
+    const selectors = [];
+    if (typeof action.selector === "string") {
+      selectors.push(action.selector);
+    }
+    if (Array.isArray(action.selectors)) {
+      selectors.push(...action.selectors);
+    }
+
+    for (const selector of selectors) {
+      if (!selector) {
+        continue;
+      }
+      try {
+        const element = document.querySelector(selector);
+        if (element) {
+          return element;
+        }
+      } catch (error) {
+        console.warn(
+          "[Widget] Prefill action selector failed",
+          selector,
+          error
+        );
+      }
+    }
+
+    if (action.textMatch) {
+      const scope =
+        typeof action.textScope === "string"
+          ? document.querySelector(action.textScope)
+          : document;
+      if (!scope) {
+        return null;
+      }
+      const candidates = scope.querySelectorAll(
+        action.textSelector || "button, [role='button'], a"
+      );
+      const targetText = action.textMatch.toLowerCase();
+      for (const candidate of candidates) {
+        const text = candidate.textContent?.trim().toLowerCase();
+        if (text && text.includes(targetText)) {
+          return candidate;
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const ensureFieldAccess = async (fieldKey) => {
+    if (!Array.isArray(fieldConfig.prefillActions) || !fieldKey) {
+      return;
+    }
+    const normalizedKey = normalizeFieldKey(fieldKey);
+    for (let index = 0; index < fieldConfig.prefillActions.length; index++) {
+      const action = fieldConfig.prefillActions[index];
+      if (!shouldTriggerPrefillAction(action, normalizedKey)) {
+        continue;
+      }
+      const actionId = action.id || `${routeId}-${index}`;
+      if (executedPrefillActions.has(actionId)) {
+        continue;
+      }
+      const trigger = findPrefillActionTrigger(action);
+      if (!trigger) {
+        console.warn(
+          "[Widget] Prefill trigger not found for",
+          action.fields?.join(", ") || fieldKey
+        );
+        continue;
+      }
+
+      try {
+        const eventType = action.type || "click";
+        if (eventType === "click" && typeof trigger.click === "function") {
+          trigger.click();
+        } else if (
+          eventType === "focus" &&
+          typeof trigger.focus === "function"
+        ) {
+          trigger.focus();
+        } else {
+          trigger.dispatchEvent(
+            new Event(eventType, { bubbles: true, cancelable: true })
+          );
+        }
+      } catch (error) {
+        console.warn("[Widget] Prefill trigger failed", error);
+      }
+
+      executedPrefillActions.add(actionId);
+      const waitMs =
+        typeof action.waitForMs === "number"
+          ? action.waitForMs
+          : fieldConfig.prefillActionWaitMs ?? 200;
+      if (waitMs > 0) {
+        await delay(waitMs);
+      }
+    }
+  };
+
+  const findFieldWithRetry = async (fieldKey) => {
+    if (!fieldKey) {
+      return null;
+    }
+    const maxAttempts = 5;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const target = locateFieldByKey(fieldKey);
+      if (target) {
+        return target;
+      }
+      await delay(100);
+    }
+    return null;
+  };
+
+  const BADGE_SIZE = 20;
+  const RIGHT_OFFSET = 40;
 
   const reposition = () => {
     const rect = field.getBoundingClientRect();
@@ -400,14 +702,9 @@ function createEmailWidget(
 
     container.style.display = "flex";
 
-    // Smart stacking: detect conflicts and adjust position
-    const rightOffset = hasConflictingIcons()
-      ? SMART_STACK_OFFSET
-      : DEFAULT_RIGHT_OFFSET;
-
     // Position INSIDE the input field, on the right side
     const top = window.scrollY + rect.top + (rect.height - BADGE_SIZE) / 2;
-    const left = window.scrollX + rect.right - rightOffset - BADGE_SIZE;
+    const left = window.scrollX + rect.right - RIGHT_OFFSET - BADGE_SIZE;
 
     container.style.top = `${top}px`;
     container.style.left = `${left}px`;
@@ -467,12 +764,32 @@ function createEmailWidget(
     }
   };
 
-  const badgeClickHandler = (event) => {
+  const badgeClickHandler = async (event) => {
     event.stopPropagation();
     const isOpen = container.getAttribute("data-open") === "true";
-    container.setAttribute("data-open", String(!isOpen));
+
     if (!isOpen) {
+      // Opening tooltip - populate dropdown with current region's personas
+      if (fieldConfig.widgetType === "persona-select" && personaSelect) {
+        const currentRegion = await storage.getSelectedRegion();
+        const personas = await storage.getPersonasByRegion(currentRegion);
+        const routePersonas = personas[fieldConfig.personaRoute] || [];
+
+        // Clear and repopulate dropdown
+        personaSelect.innerHTML = "";
+        routePersonas.forEach((persona, index) => {
+          const option = document.createElement("option");
+          option.value = persona.id;
+          option.textContent = persona.label;
+          if (index === 0) option.selected = true;
+          personaSelect.appendChild(option);
+        });
+      }
+
+      container.setAttribute("data-open", "true");
       container.classList.add("visible");
+    } else {
+      container.setAttribute("data-open", "false");
     }
   };
   button.addEventListener("click", badgeClickHandler);
@@ -487,18 +804,92 @@ function createEmailWidget(
   const actionButtonHandler = async (event) => {
     event.stopPropagation();
     try {
-      const { email, error } = await generateSignupEmail();
-      if (!email || error) {
-        hint.textContent = "Set prefix + ticket in popup first.";
-        return;
-      }
+      if (fieldConfig.widgetType === "email") {
+        // Email generation
+        const result = await storage.generateSignupEmail();
+        const { email, error } = result || {};
+        if (!email || error) {
+          if (hint) hint.textContent = "Set prefix + ticket in popup first.";
+          return;
+        }
+        applyValue(field, email);
+        if (hint) hint.textContent = `Email prefilled: ${email}`;
+        closeTooltip();
+      } else if (fieldConfig.widgetType === "phone") {
+        // Phone from storage
+        const phone = await storage.getPhoneNumber();
+        if (!phone) {
+          if (hint) hint.textContent = "Set phone number in popup first.";
+          return;
+        }
+        applyValue(field, phone);
+        if (hint) hint.textContent = "Phone number prefilled";
+        closeTooltip();
+      } else if (fieldConfig.widgetType === "persona-select") {
+        // Persona-based fill - fetch current region dynamically
+        const selectedPersonaId = personaSelect.value;
+        const currentRegion = await storage.getSelectedRegion();
+        const personas = await storage.getPersonasByRegion(currentRegion);
+        const routePersonas = personas[fieldConfig.personaRoute] || [];
+        const selectedPersona = routePersonas.find(
+          (p) => p.id === selectedPersonaId
+        );
 
-      applyValue(field, email);
-      hint.textContent = `Email prefilled: ${email}`;
-      closeTooltip();
+        if (!selectedPersona) {
+          console.error("[Widget] Persona not found:", selectedPersonaId);
+          return;
+        }
+
+        // Check if this is a multi-field persona
+        if (fieldConfig.multiField && selectedPersona.fields.length > 1) {
+          // Fill multiple fields
+          for (const personaField of selectedPersona.fields) {
+            const fieldKey = personaField.target || personaField.name;
+            if (!fieldKey || !personaField.value) {
+              continue;
+            }
+
+            await ensureFieldAccess(fieldKey);
+            const targetInput = (await findFieldWithRetry(fieldKey)) || null;
+
+            if (targetInput) {
+              applyValue(targetInput, personaField.value);
+            } else {
+              // console.warn(
+              //   "[Widget] Unable to locate field for",
+              //   fieldKey,
+              //   "on route",
+              //   fieldConfig.personaRoute
+              // );
+            }
+          }
+          closeTooltip();
+        } else {
+          // Single field (business info, address)
+          const personaField = selectedPersona.fields[0];
+          const fieldValue = personaField?.value;
+          const targetKey = personaField?.target || personaField?.name;
+          if (fieldValue) {
+            if (targetKey) {
+              await ensureFieldAccess(targetKey);
+              const targetInput =
+                (await findFieldWithRetry(targetKey)) ||
+                locateFieldByKey(targetKey);
+              if (targetInput) {
+                applyValue(targetInput, fieldValue);
+              } else {
+                applyValue(field, fieldValue);
+              }
+            } else {
+              applyValue(field, fieldValue);
+            }
+            closeTooltip();
+          }
+        }
+      }
     } catch (err) {
-      console.error("[Prefill Widget] Failed to generate email", err);
-      hint.textContent = "Something went wrong. Try again.";
+      console.error("[Widget] Fill action failed", err, err.stack);
+      if (hint) hint.textContent = "Something went wrong. Try again.";
     }
   };
   actionButton.addEventListener("click", actionButtonHandler);

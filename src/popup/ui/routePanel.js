@@ -1,8 +1,7 @@
 import { injectPersonaFields } from "../features/autofill.js";
 import { requestRouteSnapshot } from "../../shared/runtime.js";
 import { matchRoute } from "../../shared/routes.js";
-import { getPersonasByRegion } from "../../shared/storage.js";
-import { getSelectedRegion } from "../features/regionSelector.js";
+import { getPersonasByRegion, getSelectedRegion } from "../../shared/storage.js";
 
 let renderSequence = 0;
 
@@ -22,7 +21,7 @@ export async function initRoutePanel(activeTab) {
     return;
   }
 
-  let currentRegion = getSelectedRegion();
+  let currentRegion = await getSelectedRegion();
   await renderRoutePersonas(context, currentRegion, statusEl, buttonContainer);
 
   window.addEventListener("regionChanged", (event) => {
