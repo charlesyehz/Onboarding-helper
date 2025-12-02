@@ -1,4 +1,11 @@
 (async function initContentFeatures() {
+  const { isAllowedLocation } = await import(
+    chrome.runtime.getURL("src/config/allowedOrigins.js")
+  );
+  if (!isAllowedLocation(window.location)) {
+    return;
+  }
+
   const [{ applyValue }, storage, widgetConfig, routes] = await Promise.all([
     import(chrome.runtime.getURL("src/shared/domEvents.js")),
     import(chrome.runtime.getURL("src/shared/storage.js")),
@@ -44,60 +51,64 @@
     }
   };
 
-  // Initialize widgets on first load
-  await initWidgetsForCurrentRoute();
-
-  // Listen for widget toggle changes
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message?.type === "WIDGET_TOGGLED") {
-      // Reload the page to apply widget changes
-      window.location.reload();
-    }
-  });
-
-  // Listen for URL changes in single-page applications
   let lastPathname = window.location.pathname;
 
-  // Function to handle route changes
-  const handleRouteChange = async () => {
+  const refreshWidgetsForPath = async (nextPathname) => {
+    if (!nextPathname || nextPathname === lastPathname) {
+      return;
+    }
+    lastPathname = nextPathname;
     try {
-      const currentPathname = window.location.pathname;
-      if (currentPathname !== lastPathname) {
-        lastPathname = currentPathname;
-
-        // Re-initialize widgets for new route
-        await initWidgetsForCurrentRoute();
-      }
+      await initWidgetsForCurrentRoute();
     } catch (error) {
-      console.error("[Widget] handleRouteChange error:", error);
+      console.error("[Widget] Failed to refresh for route change", error);
     }
   };
 
-  // Method 1: Listen for popstate (back/forward navigation)
-  window.addEventListener("popstate", handleRouteChange);
-
-  // Method 2: Intercept pushState and replaceState for SPA navigation
-  const originalPushState = history.pushState;
-  const originalReplaceState = history.replaceState;
-
-  history.pushState = function (...args) {
-    originalPushState.apply(this, args);
-    handleRouteChange();
+  const handleRuntimeMessage = (message) => {
+    if (message?.type === "WIDGET_TOGGLED") {
+      window.location.reload();
+      return;
+    }
+    if (message?.type === "ROUTE_UPDATED" && message.payload?.pathname) {
+      refreshWidgetsForPath(message.payload.pathname);
+    }
   };
 
-  history.replaceState = function (...args) {
-    originalReplaceState.apply(this, args);
-    handleRouteChange();
+  chrome.runtime.onMessage.addListener(handleRuntimeMessage);
+
+  const requestInitialRouteSnapshot = () => {
+    try {
+      chrome.runtime.sendMessage(
+        { type: "REQUEST_ROUTE_SNAPSHOT" },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            return;
+          }
+          let snapshotPath = response?.pathname;
+          if (!snapshotPath && response?.url) {
+            try {
+              snapshotPath = new URL(response.url).pathname;
+            } catch (error) {
+              console.warn(
+                "[Widget] Unable to parse snapshot URL",
+                response.url,
+                error
+              );
+            }
+          }
+          if (snapshotPath) {
+            refreshWidgetsForPath(snapshotPath);
+          }
+        }
+      );
+    } catch (error) {
+      console.warn("[Widget] Failed to request route snapshot", error);
+    }
   };
 
-  // Method 3: Listen for hashchange
-  window.addEventListener("hashchange", handleRouteChange);
-
-  // Method 4: Polling fallback - check URL every 500ms
-  // This catches navigation that doesn't trigger the above events
-  setInterval(() => {
-    handleRouteChange();
-  }, 500);
+  await initWidgetsForCurrentRoute();
+  requestInitialRouteSnapshot();
 })();
 
 function initSettingsOverlayBridge() {

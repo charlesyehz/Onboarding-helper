@@ -1,4 +1,5 @@
 import { buildRoutePayload } from "../shared/routes.js";
+import { isAllowedUrl } from "../config/allowedOrigins.js";
 
 const routeCache = new Map();
 
@@ -19,7 +20,10 @@ function notifyTab(tabId, payload) {
 }
 
 function handleRouteUpdate(tabId, url) {
-  if (!url) return;
+  if (!url || !isAllowedUrl(url)) {
+    cacheRoute(tabId, null);
+    return;
+  }
   const payload = buildRoutePayload(url);
   cacheRoute(tabId, payload);
   notifyTab(tabId, payload);
