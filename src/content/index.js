@@ -1,4 +1,10 @@
 (async function initContentFeatures() {
+  // Import recording overlay first (works on all pages)
+  const recordingOverlay = await import(
+    chrome.runtime.getURL("src/content/recordingOverlay.js")
+  );
+  initRecordingOverlay(recordingOverlay);
+
   const { isAllowedLocation } = await import(
     chrome.runtime.getURL("src/config/allowedOrigins.js")
   );
@@ -957,4 +963,49 @@ async function createUniversalWidget(
 
   cleanupObserver.observe(document.body, { childList: true, subtree: true });
   return cleanup;
+}
+
+/**
+ * Initialize recording overlay message listeners
+ */
+function initRecordingOverlay(recordingOverlay) {
+  console.log("[Content] Recording overlay initialized");
+
+  // Check if recording is already in progress when page loads
+  chrome.runtime
+    .sendMessage({ type: "GET_RECORDER_STATE" })
+    .then((state) => {
+      console.log("[Content] Got recorder state:", state);
+      if (state && state.isRecording) {
+        console.log("[Content] Recording in progress, injecting overlay");
+        recordingOverlay.injectOverlay(state.startTime, {
+          isPaused: state.isPaused,
+          pausedDuration: state.pausedDuration,
+          pauseStartTime: state.pauseStartTime,
+        });
+      }
+    })
+    .catch((error) => {
+      console.log("[Content] Failed to get recorder state:", error);
+    });
+
+  // Listen for recording state changes
+  chrome.runtime.onMessage.addListener((message) => {
+    console.log("[Content] Received message:", message.type);
+    if (message.type === "RECORDING_STARTED" || message.type === "SHOW_RECORDING_OVERLAY") {
+      console.log("[Content] RECORDING_STARTED/SHOW_RECORDING_OVERLAY received, injecting overlay");
+      recordingOverlay.injectOverlay(message.startTime, {
+        isPaused: message.isPaused,
+        pausedDuration: message.pausedDuration,
+        pauseStartTime: message.pauseStartTime,
+      });
+    } else if (message.type === "RECORDING_STOPPED") {
+      console.log("[Content] RECORDING_STOPPED received, removing overlay");
+      recordingOverlay.removeOverlay();
+    } else if (message.type === "RECORDING_PAUSED") {
+      recordingOverlay.setPausedState(message.pauseTime);
+    } else if (message.type === "RECORDING_RESUMED") {
+      recordingOverlay.setResumedState(message.resumeTime);
+    }
+  });
 }

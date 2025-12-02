@@ -65,6 +65,19 @@ body {
   color: #0071ce;
 }
 
+.icon-button.recording-active {
+  animation: recordingPulse 2s ease-in-out infinite;
+}
+
+@keyframes recordingPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
 /* Form-related */
 .form-group {
   margin: 12px 16px;

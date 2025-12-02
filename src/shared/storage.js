@@ -432,3 +432,41 @@ export async function saveSelectedRegion(region) {
   }
   await storageSet({ [SELECTED_REGION_KEY]: region });
 }
+
+// Recording settings helpers
+export async function loadRecordingSettings() {
+  const settings = await loadSettings();
+  const defaults = {
+    filenamePattern: "zeller-recording-{date}-{time}",
+    videoQuality: "medium",
+    autoStopMinutes: 10,
+    videoCodec: "vp9",
+    includeAudio: false,
+    screenshotFormat: "png",
+    showCountdown: true,
+    notifyOnComplete: true,
+  };
+  if (!settings.recordingSettings) {
+    return defaults;
+  }
+  const merged = {
+    ...defaults,
+    ...settings.recordingSettings,
+    screenshotFormat: "png",
+    showCountdown: true,
+    notifyOnComplete: true,
+  };
+  if (typeof merged.autoStopMinutes !== "number") {
+    merged.autoStopMinutes = defaults.autoStopMinutes;
+  }
+  return merged;
+}
+
+export async function saveRecordingSettings(recordingSettings) {
+  const settings = await loadSettings();
+  settings.recordingSettings = {
+    ...settings.recordingSettings,
+    ...recordingSettings,
+  };
+  await saveSettings(settings);
+}

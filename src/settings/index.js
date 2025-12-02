@@ -4,6 +4,8 @@ import {
   toggleInlineWidget,
   getPersonasByRegion,
   savePersonas,
+  loadRecordingSettings,
+  saveRecordingSettings,
 } from "../shared/storage.js";
 import { ROUTES } from "../config/routes.js";
 
@@ -48,6 +50,9 @@ async function initGeneral() {
 
   widgetToggle.checked = settings.inlineWidgetEnabled;
 
+  // Initialize recording settings
+  await initRecordingSettings();
+
   widgetToggle.addEventListener("change", async (e) => {
     try {
       await toggleInlineWidget(e.target.checked);
@@ -70,6 +75,76 @@ async function initGeneral() {
   resetBtn.addEventListener("click", () => {
     openResetModal();
   });
+}
+
+// ============================================================================
+// Recording Settings
+// ============================================================================
+
+async function initRecordingSettings() {
+  const filenamePattern = document.getElementById("filename-pattern");
+  const videoQuality = document.getElementById("video-quality");
+  const autoStopMinutes = document.getElementById("auto-stop-minutes");
+
+  // Load current settings
+  const recordingSettings = await loadRecordingSettings();
+  const hiddenDefaults = {
+    screenshotFormat: "png",
+    showCountdown: true,
+    notifyOnComplete: true,
+  };
+
+  const needsHiddenDefaults =
+    recordingSettings.screenshotFormat !== hiddenDefaults.screenshotFormat ||
+    recordingSettings.showCountdown !== hiddenDefaults.showCountdown ||
+    recordingSettings.notifyOnComplete !== hiddenDefaults.notifyOnComplete;
+
+  if (needsHiddenDefaults) {
+    await saveRecordingSettings(hiddenDefaults);
+  }
+
+  // Populate fields
+  filenamePattern.value = recordingSettings.filenamePattern || "zeller-recording-{date}-{time}";
+  videoQuality.value = recordingSettings.videoQuality || "medium";
+  autoStopMinutes.value =
+    typeof recordingSettings.autoStopMinutes === "number"
+      ? recordingSettings.autoStopMinutes
+      : 10;
+
+  // Auto-save on change
+  const saveRecordingSettingsDebounced = debounce(async () => {
+    const parsedMinutes = parseInt(autoStopMinutes.value, 10);
+    const sanitizedMinutes = Number.isFinite(parsedMinutes) ? parsedMinutes : 10;
+
+    try {
+      await saveRecordingSettings({
+        filenamePattern: filenamePattern.value.trim() || "zeller-recording-{date}-{time}",
+        videoQuality: videoQuality.value,
+        autoStopMinutes: sanitizedMinutes,
+        ...hiddenDefaults,
+      });
+      console.log("[Settings] Recording settings saved");
+    } catch (error) {
+      console.error("[Settings] Failed to save recording settings", error);
+    }
+  }, 500);
+
+  filenamePattern.addEventListener("input", saveRecordingSettingsDebounced);
+  videoQuality.addEventListener("change", saveRecordingSettingsDebounced);
+  autoStopMinutes.addEventListener("input", saveRecordingSettingsDebounced);
+}
+
+// Debounce helper
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
 }
 
 // ============================================================================

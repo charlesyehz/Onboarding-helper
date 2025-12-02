@@ -3,7 +3,7 @@
   "name": "Zeller Onboarding helper",
   "version": "1.0",
   "description": "Zeller Onboarding helper",
-  "permissions": ["activeTab", "storage", "tabs", "scripting"],
+  "permissions": ["activeTab", "storage", "tabs", "scripting", "tabCapture", "downloads", "notifications", "offscreen"],
   "host_permissions": [
     "http://localhost/*",
     "https://dashboard.myzeller.dev/*"
@@ -24,15 +24,19 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "http://localhost/*",
-        "https://dashboard.myzeller.dev/*"
-      ],
+      "matches": ["<all_urls>"],
       "js": ["src/content/index.js"],
       "type": "module"
     }
   ],
   "web_accessible_resources": [
+    {
+      "resources": [
+        "src/content/recordingOverlay.js",
+        "src/config/allowedOrigins.js"
+      ],
+      "matches": ["<all_urls>"]
+    },
     {
       "resources": [
         "src/shared/domEvents.js",
@@ -42,7 +46,6 @@
         "src/shared/runtime.js",
         "src/config/defaultSettings.js",
         "src/config/routes.js",
-        "src/config/allowedOrigins.js",
         "src/config/widgetConfig.js",
         "images/zeller-logo.png"
       ],

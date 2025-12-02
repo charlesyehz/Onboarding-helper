@@ -1,4 +1,4 @@
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;
 
 const auBusinessInfo = [
   {
@@ -365,6 +365,17 @@ const ukRegisterPhone = [];
 export const DEFAULT_SETTINGS = {
   version: SETTINGS_VERSION,
   inlineWidgetEnabled: true,
+  recordingSettings: {
+    filenamePattern: "zeller-recording-{date}-{time}",
+    videoQuality: "medium",
+    autoStopMinutes: 10,
+    // Hidden settings with defaults
+    videoCodec: "vp9",
+    includeAudio: false,
+    screenshotFormat: "png",
+    showCountdown: true,
+    notifyOnComplete: true,
+  },
   personas: {
     AU: {
       "business-info": auBusinessInfo,

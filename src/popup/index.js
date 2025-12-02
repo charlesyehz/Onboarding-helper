@@ -1,6 +1,7 @@
 import { initEmailManager } from "./features/emailManager.js";
 import { initLoginHelper } from "./features/loginHelper.js";
 import { initRegionSelector } from "./features/regionSelector.js";
+import { initRecordingManager } from "./features/recordingManager.js";
 import { initRoutePanel } from "./ui/routePanel.js";
 import { getActiveTab } from "../shared/tabs.js";
 import { loadPopupState } from "../shared/storage.js";
@@ -29,6 +30,12 @@ document.addEventListener("DOMContentLoaded", () => {
     initLoginHelper();
   } catch (error) {
     console.error("[Popup] Failed to initialise login helper", error);
+  }
+
+  try {
+    initRecordingManager();
+  } catch (error) {
+    console.error("[Popup] Failed to initialise recording manager", error);
   }
 
   initRegionSelector();
