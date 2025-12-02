@@ -15,6 +15,10 @@ const recorderState = {
   tabId: null,
   filenameTemplate: null,
   screenshotFormat: "png",
+  // Cache settings to avoid reloading during critical operations
+  cachedSettings: null,
+  // Timeout ID for cleanup fallback
+  cleanupTimeoutId: null,
 };
 
 // Quality presets
@@ -80,8 +84,9 @@ export async function startRecording(tabId) {
     recorderState.pauseStartTime = null;
     recorderState.tabId = tabId;
 
-    // Get recording settings
+    // Get recording settings and cache them for the duration of recording
     const settings = await loadRecordingSettings();
+    recorderState.cachedSettings = settings; // Cache to avoid reloading during completion
     const quality = QUALITY_PRESETS[settings.videoQuality] || QUALITY_PRESETS.medium;
     recorderState.filenameTemplate = buildFilenameTemplate(settings.filenamePattern);
     recorderState.screenshotFormat = settings.screenshotFormat === "jpeg" ? "jpeg" : "png";
@@ -161,22 +166,73 @@ export async function stopRecording() {
   try {
     console.log("[Recorder] Stopping recording...");
 
-    // Send stop message to offscreen document
-    const response = await chrome.runtime.sendMessage({
+    // Send stop message to offscreen document with timeout protection
+    const stopPromise = chrome.runtime.sendMessage({
       type: "STOP_CAPTURE",
     });
+
+    // Add 5 second timeout - if message hangs, force cleanup
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error("Stop command timed out after 5s")), 5000);
+    });
+
+    const response = await Promise.race([stopPromise, timeoutPromise]);
+
+    // Clear timeout immediately if stop succeeded (prevents unhandled rejection)
+    clearTimeout(timeoutId);
 
     if (!response.success) {
       throw new Error(response.error || "Failed to stop capture");
     }
 
     // State will be cleaned up when RECORDING_COMPLETE message is received
+    // If that doesn't happen within 10 seconds, force cleanup
+
+    // Clear any existing cleanup timeout
+    if (recorderState.cleanupTimeoutId) {
+      clearTimeout(recorderState.cleanupTimeoutId);
+      recorderState.cleanupTimeoutId = null;
+    }
+
+    // Set new cleanup timeout
+    recorderState.cleanupTimeoutId = setTimeout(() => {
+      if (recorderState.isRecording) {
+        console.warn("[Recorder] Recording cleanup timeout - forcing cleanup");
+        cleanupRecording();
+        broadcastMessage({
+          type: "RECORDING_STOPPED",
+          error: "Recording stopped but cleanup timed out",
+        });
+      }
+    }, 10000);
+
     return { success: true };
   } catch (error) {
     console.error("[Recorder] Failed to stop recording:", error);
+    // ALWAYS cleanup on error to prevent stuck state
     cleanupRecording();
+    // Still broadcast stop message so UI updates
+    broadcastMessage({
+      type: "RECORDING_STOPPED",
+      error: error.message || "Recording stopped with errors",
+    });
     throw error;
   }
+}
+
+/**
+ * Force stop recording (emergency cleanup)
+ * Use this when normal stop fails - cleans up state immediately
+ */
+export function forceStopRecording() {
+  console.warn("[Recorder] Force stopping recording");
+  cleanupRecording();
+  broadcastMessage({
+    type: "RECORDING_STOPPED",
+    error: "Recording force-stopped by user",
+  });
+  return { success: true, forced: true };
 }
 
 /**
@@ -314,42 +370,119 @@ export function getRecorderState() {
 /**
  * Handle recording completion from offscreen document
  */
-export async function handleRecordingComplete(data, mimeType) {
-  try {
-    console.log("[Recorder] Handling recording completion, data size:", data.length);
+export async function handleRecordingComplete(downloadUrl, mimeType, sizeBytes) {
+  const revokeDownloadUrl = (() => {
+    let revoked = false;
+    return () => {
+      if (revoked || !downloadUrl) {
+        return;
+      }
+      revoked = true;
+      try {
+        chrome.runtime.sendMessage(
+          { type: "REVOKE_DOWNLOAD_URL", downloadUrl },
+          () => chrome.runtime.lastError
+        );
+      } catch (error) {
+        console.warn("[Recorder] Failed to request download URL revocation", error);
+      }
+    };
+  })();
 
-    // Convert array back to Blob
-    const blob = new Blob([new Uint8Array(data)], { type: mimeType });
-    console.log("[Recorder] Created blob, size:", blob.size, "bytes");
+  try {
+    console.log("[Recorder] Handling recording completion, size:", sizeBytes, "bytes");
 
     // Generate filename
     const duration = Date.now() - recorderState.startTime - recorderState.pausedDuration;
     const filename = await generateFilename(duration);
 
-    // Download video
-    await downloadFile(blob, filename);
-
-    // Show notification
-    const settings = await loadRecordingSettings();
-    if (settings.notifyOnComplete) {
-      showNotification(filename, formatDuration(duration));
-    }
-
-    // Notify success
-    broadcastMessage({
-      type: "RECORDING_STOPPED",
+    // Download directly from URL (no memory copy)
+    const downloadId = await chrome.downloads.download({
+      url: downloadUrl,
       filename: filename,
-      duration: duration,
+      saveAs: false,
+      conflictAction: "uniquify",
     });
 
-    console.log("[Recorder] Recording saved successfully:", filename);
+    console.log("[Recorder] Download started with ID:", downloadId);
+
+    const notifySuccess = () => {
+      const settings = recorderState.cachedSettings || { notifyOnComplete: true };
+      if (settings.notifyOnComplete) {
+        showNotification(filename, formatDuration(duration));
+      }
+      broadcastMessage({
+        type: "RECORDING_STOPPED",
+        filename: filename,
+        duration: duration,
+      });
+      console.log("[Recorder] Recording saved successfully:", filename);
+    };
+
+    const notifyError = (errorMessage) => {
+      broadcastMessage({
+        type: "RECORDING_ERROR",
+        error: errorMessage || "Failed to save recording",
+      });
+    };
+
+    let downloadTimeoutId = null;
+    const clearDownloadTimeout = () => {
+      if (downloadTimeoutId) {
+        clearTimeout(downloadTimeoutId);
+        downloadTimeoutId = null;
+      }
+    };
+
+    const detachDownloadListener = (listener) => {
+      try {
+        chrome.downloads.onChanged.removeListener(listener);
+      } catch (error) {
+        console.warn("[Recorder] Failed to remove download listener", error);
+      }
+      clearDownloadTimeout();
+    };
+
+    const downloadListener = (delta) => {
+      if (delta.id !== downloadId) {
+        return;
+      }
+
+      if (delta.state?.current === "complete") {
+        detachDownloadListener(downloadListener);
+        revokeDownloadUrl();
+        notifySuccess();
+        cleanupRecording();
+        return;
+      }
+
+      if (delta.error) {
+        detachDownloadListener(downloadListener);
+        revokeDownloadUrl();
+        console.error("[Recorder] Download failed:", delta.error);
+        notifyError("Failed to save recording");
+        cleanupRecording();
+      }
+    };
+
+    chrome.downloads.onChanged.addListener(downloadListener);
+
+    // Fallback: emit error if download never completes (60s)
+    downloadTimeoutId = setTimeout(() => {
+      detachDownloadListener(downloadListener);
+      revokeDownloadUrl();
+      console.warn("[Recorder] Download timeout while saving recording");
+      notifyError("Recording download timed out");
+      cleanupRecording();
+    }, 60000);
+
   } catch (error) {
     console.error("[Recorder] Failed to save recording:", error);
+    revokeDownloadUrl();
     broadcastMessage({
       type: "RECORDING_ERROR",
       error: error.message || "Failed to save recording",
     });
-  } finally {
     cleanupRecording();
   }
 }
@@ -379,7 +512,8 @@ function formatDuration(milliseconds) {
 
 async function getBaseFilename(duration) {
   if (!recorderState.filenameTemplate) {
-    const settings = await loadRecordingSettings();
+    // Use cached settings if available, otherwise load from storage
+    const settings = recorderState.cachedSettings || await loadRecordingSettings();
     recorderState.filenameTemplate = buildFilenameTemplate(settings.filenamePattern);
   }
 
@@ -406,37 +540,6 @@ function buildFilenameTemplate(patternInput) {
   template = template.replace(/[<>:"/\\|?*]/g, "-");
 
   return template;
-}
-
-/**
- * Download file
- */
-async function downloadFile(blob, filename) {
-  // Convert blob to data URL (service workers can't use URL.createObjectURL)
-  const arrayBuffer = await blob.arrayBuffer();
-  const base64 = arrayBufferToBase64(arrayBuffer);
-  const dataUrl = `data:${blob.type};base64,${base64}`;
-
-  await chrome.downloads.download({
-    url: dataUrl,
-    filename: filename,
-    saveAs: false,
-    conflictAction: "uniquify",
-  });
-
-  console.log("[Recorder] Download started:", filename);
-}
-
-/**
- * Convert ArrayBuffer to base64
- */
-function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
 }
 
 /**
@@ -467,14 +570,21 @@ function showNotification(filename, duration) {
  * Cleanup recording state
  */
 function cleanupRecording() {
+  // Clear cleanup timeout if active
+  if (recorderState.cleanupTimeoutId) {
+    clearTimeout(recorderState.cleanupTimeoutId);
+    recorderState.cleanupTimeoutId = null;
+  }
+
   recorderState.isRecording = false;
   recorderState.isPaused = false;
-    recorderState.startTime = null;
-    recorderState.pausedDuration = 0;
-    recorderState.pauseStartTime = null;
-    recorderState.tabId = null;
+  recorderState.startTime = null;
+  recorderState.pausedDuration = 0;
+  recorderState.pauseStartTime = null;
+  recorderState.tabId = null;
   recorderState.filenameTemplate = null;
   recorderState.screenshotFormat = "png";
+  recorderState.cachedSettings = null;
 
   console.log("[Recorder] Cleanup complete");
 }

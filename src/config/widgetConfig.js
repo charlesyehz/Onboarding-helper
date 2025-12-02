@@ -48,8 +48,9 @@ export const WIDGET_ROUTES = {
       {
         selectors: ["#phone"],
         widgetType: "phone",
+        personaRoute: "register-phone",
         buttonLabel: "Prefill Phone",
-        hintText: "Uses saved phone number",
+        hintText: "Uses saved or regional phone number",
       },
     ],
   },
@@ -93,6 +94,51 @@ export const WIDGET_ROUTES = {
     ],
   },
 
+  // Legacy /kyc route support
+  "kyc-legacy": {
+    urlPattern: /^\/(?:onboarding\/)?kyc\/?$/i,
+    fields: [
+      {
+        selectors: [
+          "#firstName",
+          'input[name="firstName"]',
+          "#middleName",
+          'input[name="middleName"]',
+          "#lastName",
+          'input[name="lastName"]',
+          "#dob",
+          'input[name="dob"]',
+          "#street",
+          'input[name="street"]',
+        ],
+        widgetType: "persona-select",
+        personaRoute: "kyc-confirm-details",
+        tooltipLabel: "Select Persona:",
+        buttonLabel: "Prefill Details",
+        multiField: true,
+      },
+    ],
+  },
+
+  // KYC passport legacy route
+  "kyc-passport": {
+    urlPattern: /\/onboarding\/kyc\/passport/i,
+    fields: [
+      {
+        selectors: [
+          "#documentNumber",
+          'input[name="documentNumber"]',
+          "#passportNumber",
+          'input[name="passportNumber"]',
+        ],
+        widgetType: "persona-select",
+        personaRoute: "kyc-passport",
+        tooltipLabel: "Select Passport Persona:",
+        buttonLabel: "Prefill Passport",
+      },
+    ],
+  },
+
   // Registered office address route
   "registered-office-address": {
     urlPattern: /\/registered-office-address/i,
@@ -103,9 +149,32 @@ export const WIDGET_ROUTES = {
           'input[name="registeredAddress.street1"]',
           "#businessAddress\\.street1",
           'input[name="businessAddress.street1"]',
+          "#street1",
+          'input[name="street1"]',
         ],
         widgetType: "persona-select",
         personaRoute: "registered-office-address",
+        tooltipLabel: "Select Address:",
+        buttonLabel: "Prefill Address",
+      },
+    ],
+  },
+
+  // Place of business route (legacy)
+  "place-of-business": {
+    urlPattern: /\/place-of-business/i,
+    fields: [
+      {
+        selectors: [
+          "#registeredAddress\\.street1",
+          'input[name="registeredAddress.street1"]',
+          "#businessAddress\\.street1",
+          'input[name="businessAddress.street1"]',
+          "#street1",
+          'input[name="street1"]',
+        ],
+        widgetType: "persona-select",
+        personaRoute: "place-of-business",
         tooltipLabel: "Select Address:",
         buttonLabel: "Prefill Address",
       },

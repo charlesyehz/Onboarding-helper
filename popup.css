@@ -154,6 +154,53 @@ header {
   position: relative;
 }
 
+.storage-warning {
+  display: none;
+  background: #fff4e5;
+  border: 1px solid #f0b429;
+  color: #5f370e;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  gap: 12px;
+  align-items: center;
+}
+
+.storage-warning.visible {
+  display: flex;
+}
+
+.storage-warning__content {
+  flex: 1 1 auto;
+}
+
+.storage-warning__content strong {
+  display: block;
+  font-size: 14px;
+}
+
+.storage-warning__content p {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.storage-warning__button {
+  margin: 0;
+  align-self: flex-start;
+  white-space: nowrap;
+}
+
+body.storage-warning-active header,
+body.storage-warning-active .card {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+body.storage-warning-active .storage-warning {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 /* Region Selector */
 .region-selector {
   position: relative;
@@ -228,6 +275,14 @@ body.light-theme .form-group input {
   color: #333;
 }
 
+body.light-theme .form-group input:disabled {
+  background-color: #f5f5f5;
+  border-color: #ddd;
+  color: #999;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 body.light-theme .btn-primary {
   background-color: #0071ce;
   color: #fff;
@@ -286,6 +341,14 @@ body.dark-theme .form-group input {
   background-color: #1a1a1a;
   border-color: #555;
   color: #f2f2f2;
+}
+
+body.dark-theme .form-group input:disabled {
+  background-color: #252525;
+  border-color: #444;
+  color: #666;
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 body.dark-theme .btn-primary {

@@ -3,6 +3,7 @@ import { isAllowedUrl } from "../config/allowedOrigins.js";
 import {
   startRecording,
   stopRecording,
+  forceStopRecording,
   pauseRecording,
   resumeRecording,
   captureScreenshot,
@@ -101,6 +102,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Async response
   }
 
+  if (message?.type === "FORCE_STOP_RECORDING") {
+    const result = forceStopRecording();
+    sendResponse(result);
+    return true;
+  }
+
   if (message?.type === "PAUSE_RECORDING") {
     pauseRecording()
       .then((result) => sendResponse(result))
@@ -136,7 +143,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // Handle recording completion from offscreen document
   if (message?.type === "RECORDING_COMPLETE") {
-    handleRecordingComplete(message.data, message.mimeType)
+    handleRecordingComplete(message.downloadUrl, message.mimeType, message.sizeBytes)
       .catch((error) => console.error("[Router] Failed to handle recording complete:", error));
     return false;
   }

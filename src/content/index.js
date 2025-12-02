@@ -26,8 +26,21 @@
   const initWidgetsForCurrentRoute = async () => {
     if (!chrome.runtime?.id) {
       console.warn(
-        "[Widget] Extension context invalidated - please refresh the page"
+        "[Widget] Extension context invalidated - cleaning up and please refresh the page"
       );
+
+      // Cleanup active widgets before returning to prevent memory leaks
+      activeControllers.forEach((controller) => {
+        try {
+          if (controller.cleanup) {
+            controller.cleanup();
+          }
+        } catch (error) {
+          console.warn("[Widget] Cleanup error during invalidation:", error);
+        }
+      });
+      activeControllers = [];
+
       return;
     }
 
@@ -78,6 +91,12 @@
     }
     if (message?.type === "ROUTE_UPDATED" && message.payload?.pathname) {
       refreshWidgetsForPath(message.payload.pathname);
+      return;
+    }
+    if (message?.type === storage.STORAGE_CONTEXT_INVALIDATED_EVENT) {
+      console.warn(
+        "[Widget] Extension storage became unavailable. Reload the extension from chrome://extensions."
+      );
     }
   };
 
@@ -259,6 +278,7 @@ function createUniversalWidgetController({
   let observer = null;
   let enabled = false;
   const attachedWidgets = new Map();
+  const pendingAttachments = new Set(); // Synchronous guard against race conditions
 
   const ensureBodyReady = (callback) => {
     if (document.body) {
@@ -301,10 +321,21 @@ function createUniversalWidgetController({
     if (!field) {
       return;
     }
+
+    // Check Set FIRST (synchronous, prevents race conditions)
+    if (pendingAttachments.has(field)) {
+      return;
+    }
+
+    // Double-check with dataset attribute
     if (field.dataset.zellerWidgetAttached === "true") {
       return;
     }
+
+    // Mark as pending immediately (before any async work)
+    pendingAttachments.add(field);
     field.dataset.zellerWidgetAttached = "true";
+
     const cleanup = createUniversalWidget(
       field,
       applyValue,
@@ -313,7 +344,10 @@ function createUniversalWidgetController({
       routeId,
       region,
       routes,
-      () => attachedWidgets.delete(field)
+      () => {
+        attachedWidgets.delete(field);
+        pendingAttachments.delete(field); // Clean up Set on removal
+      }
     );
     attachedWidgets.set(field, cleanup);
   };
@@ -839,25 +873,63 @@ async function createUniversalWidget(
     event.stopPropagation();
     try {
       if (fieldConfig.widgetType === "email") {
-        // Email generation
-        const result = await storage.generateSignupEmail();
+        // Email generation - validate field exists and is editable first
+        if (!field || !document.body.contains(field)) {
+          if (hint) hint.textContent = "Email field no longer available.";
+          return;
+        }
+        if (field.disabled || field.readOnly) {
+          if (hint) hint.textContent = "Email field is not editable.";
+          return;
+        }
+
+        let result;
+        try {
+          result = await storage.generateSignupEmail();
+        } catch (error) {
+          if (storage.isStorageUnavailableError?.(error)) {
+            if (hint)
+              hint.textContent =
+                "Extension storage unavailable. Reload the extension.";
+          } else {
+            console.error("[Widget] Failed to generate email", error);
+            if (hint) hint.textContent = "Failed to generate email.";
+          }
+          return;
+        }
         const { email, error } = result || {};
         if (!email || error) {
-          if (hint) hint.textContent = "Set prefix + ticket in popup first.";
+          if (hint) {
+            if (error === "COUNTER_INCREMENT_FAILED") {
+              hint.textContent = "Failed to generate email. Please try again.";
+            } else {
+              hint.textContent = "Set prefix + ticket in popup first.";
+            }
+          }
           return;
         }
         applyValue(field, email);
         if (hint) hint.textContent = `Email prefilled: ${email}`;
         closeTooltip();
       } else if (fieldConfig.widgetType === "phone") {
-        // Phone from storage
-        const phone = await storage.getPhoneNumber();
+        const { value: phone, source } = await resolvePhonePrefillValue({
+          storage,
+          fieldConfig,
+          routeId,
+          fallbackRegion: region,
+        });
         if (!phone) {
-          if (hint) hint.textContent = "Set phone number in popup first.";
+          if (hint)
+            hint.textContent = "Set phone number in popup or settings first.";
           return;
         }
         applyValue(field, phone);
-        if (hint) hint.textContent = "Phone number prefilled";
+        if (hint) {
+          hint.textContent =
+            source === "persona"
+              ? "Regional phone number prefilled"
+              : "Phone number prefilled";
+        }
         closeTooltip();
       } else if (fieldConfig.widgetType === "persona-select") {
         // Persona-based fill - fetch current region dynamically
@@ -924,6 +996,12 @@ async function createUniversalWidget(
         }
       }
     } catch (err) {
+      if (storage.isStorageUnavailableError?.(err)) {
+        if (hint)
+          hint.textContent =
+            "Extension storage unavailable. Reload the extension.";
+        return;
+      }
       console.error("[Widget] Fill action failed", err, err.stack);
       if (hint) hint.textContent = "Something went wrong. Try again.";
     }
@@ -963,6 +1041,58 @@ async function createUniversalWidget(
 
   cleanupObserver.observe(document.body, { childList: true, subtree: true });
   return cleanup;
+}
+
+async function resolvePhonePrefillValue({
+  storage,
+  fieldConfig,
+  routeId,
+  fallbackRegion,
+}) {
+  let activeRegion = fallbackRegion;
+  if (typeof storage.getSelectedRegion === "function") {
+    try {
+      activeRegion =
+        (await storage.getSelectedRegion()) || fallbackRegion || null;
+    } catch (error) {
+      console.warn("[Widget] Failed to read selected region", error);
+    }
+  }
+
+  const personaRouteId = fieldConfig.personaRoute || routeId || null;
+  if (
+    personaRouteId &&
+    activeRegion &&
+    typeof storage.getPersonasByRegion === "function"
+  ) {
+    try {
+      const personas = await storage.getPersonasByRegion(activeRegion);
+      const routePersonas = personas?.[personaRouteId] || [];
+      for (const persona of routePersonas) {
+        const phoneField = persona?.fields?.find(
+          (field) => typeof field?.value === "string" && field.value.trim()
+        );
+        if (phoneField?.value) {
+          return { value: phoneField.value.trim(), source: "persona" };
+        }
+      }
+    } catch (error) {
+      console.warn("[Widget] Failed to read regional phone personas", error);
+    }
+  }
+
+  if (typeof storage.getPhoneNumber === "function") {
+    try {
+      const savedPhone = await storage.getPhoneNumber();
+      if (savedPhone) {
+        return { value: savedPhone, source: "storage" };
+      }
+    } catch (error) {
+      console.warn("[Widget] Failed to read saved phone number", error);
+    }
+  }
+
+  return { value: "", source: null };
 }
 
 /**

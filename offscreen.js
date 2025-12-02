@@ -9,6 +9,7 @@ let currentStream = null;
 let videoElement = null;
 let canvasElement = null;
 let videoReadyPromise = null;
+let activeDownloadUrl = null;
 
 // Listen for messages from the service worker
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -61,6 +62,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.error("[Offscreen] Screenshot failed:", error);
         sendResponse({ success: false, error: error.message });
       });
+    return true;
+  }
+
+  if (message.type === "REVOKE_DOWNLOAD_URL") {
+    const { downloadUrl } = message;
+    if (typeof downloadUrl === "string") {
+      try {
+        URL.revokeObjectURL(downloadUrl);
+        if (activeDownloadUrl === downloadUrl) {
+          activeDownloadUrl = null;
+        }
+        sendResponse?.({ success: true });
+      } catch (error) {
+        console.warn("[Offscreen] Failed to revoke download URL", error);
+        sendResponse?.({ success: false, error: error.message });
+      }
+    } else {
+      sendResponse?.({ success: false, error: "Invalid download URL" });
+    }
     return true;
   }
 });
@@ -118,19 +138,37 @@ async function startCapture(streamId, options) {
       stream.getTracks().forEach((track) => track.stop());
       cleanupStreamResources();
 
-      // Send chunks back to service worker
+      // Create blob (stays in memory, no extra copy)
       const blob = new Blob(recordedChunks, { type: "video/webm" });
-      const arrayBuffer = await blob.arrayBuffer();
+      const blobSize = blob.size;
 
+      // Clean up any previous URL reference
+      if (activeDownloadUrl) {
+        try {
+          URL.revokeObjectURL(activeDownloadUrl);
+        } catch (error) {
+          console.warn("[Offscreen] Failed to revoke prior download URL", error);
+        }
+        activeDownloadUrl = null;
+      }
+
+      // Create download URL (no memory copy)
+      const url = URL.createObjectURL(blob);
+      activeDownloadUrl = url;
+
+      // Send URL + metadata to service worker (no data copy!)
       chrome.runtime.sendMessage({
         type: "RECORDING_COMPLETE",
-        data: Array.from(new Uint8Array(arrayBuffer)),
+        downloadUrl: url,
         mimeType: blob.type,
+        sizeBytes: blobSize,
       });
 
-      // Clean up
+      // Clean up local state (URL stays valid until revoked by service worker)
       mediaRecorder = null;
       recordedChunks = [];
+
+      console.log("[Offscreen] Recording data ready for download, size:", blobSize, "bytes");
     };
 
     mediaRecorder.onerror = (event) => {

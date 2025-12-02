@@ -1,7 +1,11 @@
 import { injectPersonaFields } from "../features/autofill.js";
 import { requestRouteSnapshot } from "../../shared/runtime.js";
 import { matchRoute } from "../../shared/routes.js";
-import { getPersonasByRegion, getSelectedRegion } from "../../shared/storage.js";
+import {
+  getPersonasByRegion,
+  getPhoneNumber,
+  getSelectedRegion,
+} from "../../shared/storage.js";
 
 let renderSequence = 0;
 
@@ -24,9 +28,20 @@ export async function initRoutePanel(activeTab) {
   let currentRegion = await getSelectedRegion();
   await renderRoutePersonas(context, currentRegion, statusEl, buttonContainer);
 
+  const rerender = () =>
+    renderRoutePersonas(context, currentRegion, statusEl, buttonContainer);
+
   window.addEventListener("regionChanged", (event) => {
     currentRegion = event.detail?.region || currentRegion;
-    renderRoutePersonas(context, currentRegion, statusEl, buttonContainer);
+    rerender();
+  });
+
+  window.addEventListener("personasUpdated", rerender);
+
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type === "SETTINGS_UPDATED") {
+      rerender();
+    }
   });
 }
 
@@ -49,6 +64,16 @@ async function renderRoutePersonas(
 
     const personas = personasByRoute?.[context.route.id] || [];
     if (!personas.length) {
+      const handled = await renderLegacyFallback({
+        context,
+        region,
+        statusEl,
+        buttonContainer,
+        sequence,
+      });
+      if (handled) {
+        return;
+      }
       statusEl.textContent = `No personas configured for ${routeTitle} (${region}).`;
       return;
     }
@@ -98,4 +123,37 @@ function extractPathFromUrl(urlString) {
   } catch {
     return "";
   }
+}
+
+async function renderLegacyFallback({
+  context,
+  region,
+  statusEl,
+  buttonContainer,
+  sequence,
+}) {
+  if (context.route.id !== "register-phone") {
+    return false;
+  }
+
+  const phone = (await getPhoneNumber())?.trim();
+  if (sequence !== renderSequence) {
+    return true;
+  }
+
+  if (!phone) {
+    statusEl.textContent = `Save a phone number in the popup for ${region}.`;
+    return true;
+  }
+
+  statusEl.textContent = `Use saved phone number (${region}):`;
+  const button = document.createElement("button");
+  button.textContent = "Prefill phone number";
+  button.addEventListener("click", () => {
+    injectPersonaFields(context.activeTabId, [
+      { role: "textbox", name: "phone", value: phone },
+    ]);
+  });
+  buttonContainer.appendChild(button);
+  return true;
 }

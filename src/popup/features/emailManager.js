@@ -1,6 +1,8 @@
 import {
   clearAutofillHistory,
   generateSignupEmail,
+  getSelectedRegion,
+  isStorageUnavailableError,
   loadPopupState,
   saveEmailSettings,
   savePhoneNumber,
@@ -40,11 +42,50 @@ export async function initEmailManager(preloadedState = null) {
   prefixInput.addEventListener("input", persistEmailSettings);
   ticketInput.addEventListener("input", persistEmailSettings);
 
-  phoneInput.addEventListener("input", () => {
-    savePhoneNumber(phoneInput.value.trim()).catch((error) =>
-      console.error("[Email Manager] Failed to save phone number", error)
-    );
+  let phoneSaveTimeout = null;
+  let lastSavedPhoneNumber = phoneNumber?.trim() || "";
+  let currentRegion = await getSelectedRegion().catch(() => "AU");
+  applyPhoneRegionState(currentRegion);
+
+  window.addEventListener("regionChanged", (event) => {
+    currentRegion = event.detail?.region || currentRegion;
+    applyPhoneRegionState(currentRegion);
   });
+
+  const queuePhoneSave = (value, { immediate = false, force = false } = {}) => {
+    if (currentRegion !== "AU" && !force) {
+      return;
+    }
+    const trimmed = value.trim();
+    if (trimmed === lastSavedPhoneNumber) {
+      return;
+    }
+
+    const persist = async () => {
+      try {
+        await savePhoneNumber(trimmed);
+        lastSavedPhoneNumber = trimmed;
+        window.dispatchEvent(new CustomEvent("personasUpdated"));
+      } catch (error) {
+        console.error("[Email Manager] Failed to save phone number", error);
+      }
+    };
+
+    if (immediate) {
+      clearTimeout(phoneSaveTimeout);
+      phoneSaveTimeout = null;
+      void persist();
+      return;
+    }
+
+    clearTimeout(phoneSaveTimeout);
+    phoneSaveTimeout = setTimeout(persist, 400);
+  };
+
+  phoneInput.addEventListener("input", () => queuePhoneSave(phoneInput.value));
+  phoneInput.addEventListener("blur", () =>
+    queuePhoneSave(phoneInput.value, { immediate: true })
+  );
 
   if (clearHistoryButton) {
     clearHistoryButton.addEventListener("click", async () => {
@@ -53,7 +94,19 @@ export async function initEmailManager(preloadedState = null) {
       ticketInput.value = "";
       phoneInput.value = "";
       renderLastEmail(lastEmailDisplay, "");
+      queuePhoneSave("", { immediate: true, force: true });
     });
+  }
+
+  function applyPhoneRegionState(region) {
+    const isAU = region === "AU";
+    phoneInput.disabled = !isAU;
+    phoneInput.title = isAU
+      ? "Phone number used for AU register-phone forms"
+      : "UK phone numbers are configured via Settings";
+    phoneInput.placeholder = isAU
+      ? "Enter phone number"
+      : "Managed via Settings for UK";
   }
 
   generateButton.addEventListener("click", async () => {
@@ -93,10 +146,24 @@ export async function initEmailManager(preloadedState = null) {
     }
 
     // Only generate and increment counter if field exists
-    const { email, error } = await generateSignupEmail({
-      prefix,
-      ticketNumber,
-    });
+    let generateResult;
+    try {
+      generateResult = await generateSignupEmail({
+        prefix,
+        ticketNumber,
+      });
+    } catch (error) {
+      if (isStorageUnavailableError(error)) {
+        statusEl.textContent =
+          "Extension storage is unavailable. Reload the extension to continue.";
+      } else {
+        console.error("[Email Manager] Failed to generate signup email", error);
+        statusEl.textContent = "Unable to generate email. Please try again.";
+      }
+      return;
+    }
+
+    const { email, error } = generateResult || {};
 
     if (!email || error) {
       statusEl.textContent =

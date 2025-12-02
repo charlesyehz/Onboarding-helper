@@ -10,6 +10,7 @@ import {
 import { ROUTES } from "../config/routes.js";
 
 const ROUTE_TAB_ORDER = [
+  "register-phone",
   "business-info",
   "registered-office-address",
   "add-member",

@@ -18,6 +18,21 @@
   -->
   <body class="light-theme">
     <div class="container">
+      <div id="storage-warning" class="storage-warning" hidden>
+        <div class="storage-warning__content">
+          <strong>Extension needs a reload</strong>
+          <p id="storage-warning-text">
+            Chrome cleared the extension context. Reload to keep personas and recording tools available.
+          </p>
+        </div>
+        <button
+          id="reload-extension-btn"
+          class="btn-primary storage-warning__button"
+          type="button"
+        >
+          Reload Extension
+        </button>
+      </div>
       <header>
         <h2>ONB HELPER</h2>
         <div style="display: flex; gap: 8px; align-items: center">

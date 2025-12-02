@@ -360,7 +360,15 @@ const ukAddMember = [
   },
 ];
 
-const ukRegisterPhone = [];
+const ukRegisterPhone = [
+  {
+    id: "uk-default-phone",
+    label: "Default UK Phone",
+    fields: [
+      { role: "textbox", name: "phone", target: "phone", value: "7908685687" },
+    ],
+  },
+];
 
 export const DEFAULT_SETTINGS = {
   version: SETTINGS_VERSION,
@@ -382,7 +390,9 @@ export const DEFAULT_SETTINGS = {
       "kyc-share-info": auKycShare,
       "kyc-passport": auPassport,
       "kyc-confirm-details": auKycConfirm,
+      "kyc-legacy": auKycConfirm,
       "registered-office-address": auRegisteredAddress,
+      "place-of-business": auRegisteredAddress,
       "add-member": auAddMember,
       "register-phone": [],
     },
@@ -391,7 +401,9 @@ export const DEFAULT_SETTINGS = {
       "kyc-share-info": ukKycShare,
       "kyc-passport": ukPassport,
       "kyc-confirm-details": ukKycConfirm,
+      "kyc-legacy": ukKycConfirm,
       "registered-office-address": ukRegisteredAddress,
+      "place-of-business": ukRegisteredAddress,
       "add-member": ukAddMember,
       "register-phone": ukRegisterPhone,
     },

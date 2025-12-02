@@ -77,6 +77,28 @@ export const ROUTES = [
     ],
   },
   {
+    id: "kyc-legacy",
+    path: "/onboarding/kyc",
+    altPaths: ["/kyc"],
+    title: "KYC Legacy",
+    fieldSchema: [
+      {
+        role: "textbox",
+        name: "fullName",
+        placeholder: "Full name",
+      },
+      { role: "textbox", name: "firstName", placeholder: "First name" },
+      { role: "textbox", name: "middleName", placeholder: "Middle name" },
+      { role: "textbox", name: "lastName", placeholder: "Last name" },
+      { role: "textbox", name: "dob", placeholder: "DD/MM/YYYY" },
+      {
+        role: "textbox",
+        name: "Address",
+        placeholder: "Street, suburb, state",
+      },
+    ],
+  },
+  {
     id: "registered-office-address",
     path: "/onboarding/*/registered-office-address",
     altPaths: ["/registered-office-address"],
@@ -90,10 +112,29 @@ export const ROUTES = [
     ],
   },
   {
+    id: "place-of-business",
+    path: "/onboarding/*/place-of-business",
+    altPaths: ["/place-of-business"],
+    title: "Place of Business Address",
+    fieldSchema: [
+      {
+        role: "textbox",
+        name: "Address",
+        placeholder: "Street, suburb, state",
+      },
+    ],
+  },
+  {
     id: "register-phone",
     path: "/register-phone",
     title: "Register Phone",
-    fieldSchema: [],
+    fieldSchema: [
+      {
+        role: "textbox",
+        name: "phone",
+        placeholder: "Phone number",
+      },
+    ],
   },
   {
     id: "add-member",
