@@ -152,10 +152,12 @@ A Chrome extension designed to streamline the Zeller onboarding process by autom
 ### Settings Page
 
 1. **Open Settings**
+
    - Click the settings icon (⚙️) in the extension popup
    - Or navigate directly to `settings.html`
 
 2. **Configure General Settings**
+
    - Toggle the inline widget on/off
    - Customize screen recording options:
      - Set filename pattern (e.g., `zeller-recording-{date}-{time}`)
@@ -164,6 +166,7 @@ A Chrome extension designed to streamline the Zeller onboarding process by autom
    - Reset all settings to defaults
 
 3. **Manage Personas**
+
    - Switch between regions (AU/UK)
    - Select a route (Business Info, KYC, etc.)
    - Click "Add Item" to create a new persona
@@ -192,17 +195,20 @@ A Chrome extension designed to streamline the Zeller onboarding process by autom
 ### Screen Recording
 
 1. **Start Recording**
+
    - Click the video icon (🎥) in the extension popup
    - Choose which screen/window/tab to record
    - Recording starts immediately with on-screen overlay
 
 2. **During Recording**
+
    - **Timer Overlay**: Shows elapsed recording time
    - **Pause/Resume**: Click pause button in overlay or popup
    - **Screenshot**: Capture a screenshot frame (saves separately)
    - **Stop**: Click the stop button in popup or overlay
 
 3. **After Recording**
+
    - Video automatically downloads to your Downloads folder
    - Desktop notification shows recording duration
    - Filename follows your configured pattern
@@ -453,4 +459,4 @@ Internal use only - Zeller Pty Ltd
 ---
 
 **Maintained by**: Zeller Engineering Team
-**Last Updated**: December 2024
+**Last Updated**: December 2025

@@ -1,9 +1,18 @@
 {
   "manifest_version": 3,
   "name": "Zeller Onboarding helper",
-  "version": "1.0",
+  "version": "2.0",
   "description": "Zeller Onboarding helper",
-  "permissions": ["activeTab", "storage", "tabs", "scripting", "tabCapture", "downloads", "notifications", "offscreen"],
+  "permissions": [
+    "activeTab",
+    "storage",
+    "tabs",
+    "scripting",
+    "tabCapture",
+    "downloads",
+    "notifications",
+    "offscreen"
+  ],
   "host_permissions": [
     "http://localhost/*",
     "https://dashboard.myzeller.dev/*"
@@ -49,10 +58,7 @@
         "src/config/widgetConfig.js",
         "images/zeller-logo.png"
       ],
-      "matches": [
-        "http://localhost/*",
-        "https://dashboard.myzeller.dev/*"
-      ]
+      "matches": ["http://localhost/*", "https://dashboard.myzeller.dev/*"]
     }
   ]
 }
