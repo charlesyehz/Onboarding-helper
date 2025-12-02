@@ -12,15 +12,9 @@ A Chrome extension designed to streamline the Zeller onboarding process by autom
 - **SignUp & Log Back In**: Separate buttons for signup and returning user flows
 - **Concurrent-Safe**: Handles multiple simultaneous email generations without duplicates
 
-### 📱 Phone Autofill
-
-- **Automatic Phone Population**: Auto-fills phone numbers on `/register-phone` pages
-- **Custom Phone Numbers**: Configure your preferred test phone number (AU format)
-- **Smart Detection**: Uses MutationObserver to handle dynamically loaded forms
-
 ### 👀 Prefill Widget
 
-- **In-Field Icon**: Subtle icon appears inside email input fields on focus
+- **In-Field Icon**: Subtle icon appears inside input fields on focus
 - **Smart Positioning**: Automatically detects and stacks next to password manager icons
 - **Quick Access**: Click the icon to instantly prefill email with saved settings
 - **Adaptive Positioning**: Follows input field even when validation messages appear
@@ -42,11 +36,12 @@ A Chrome extension designed to streamline the Zeller onboarding process by autom
   - Trust
   - Government
   - Association
+- **Address/Personal Data**: Test data for personal information
 - **KYC Data**: Test data for personal information and passport verification
 
 ### 🧹 History Management
 
-- **Clear History**: One-click button to reset all stored data
+- **Clear to default setup**: One-click button to reset all stored data
 - **Fresh Start**: Clears email counters, phone numbers, and saved settings
 
 ### ⚙️ Settings Page
@@ -136,12 +131,6 @@ A Chrome extension designed to streamline the Zeller onboarding process by autom
 3. **See the 👀 icon** appear inside the field (right side)
 4. **Click the icon** to open the quick-fill tooltip
 5. **Click "Prefill email"** to instantly fill with your saved settings
-
-### Phone Autofill
-
-1. **Enter phone number** in the popup (under "Phone Number")
-2. **Navigate to** `/register-phone` page
-3. **Phone field auto-fills** automatically with your saved number
 
 ### URL-Based Autofill
 
