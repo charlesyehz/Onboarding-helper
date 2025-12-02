@@ -68,6 +68,17 @@ const auBusinessInfo = [
     ],
   },
   {
+    id: "unincorporated-association",
+    label: "Unincorporated Association",
+    fields: [
+      {
+        role: "textbox",
+        name: "ABN or ACN",
+        value: "61606290472",
+      },
+    ],
+  },
+  {
     id: "not-supported",
     label: "Not Supported",
     fields: [
@@ -298,14 +309,8 @@ const auAddMember = [
     label: "Arnold DVStest",
     fields: [
       { role: "textbox", name: "firstName", value: "Arnold" },
-      { role: "textbox", name: "middleName", value: "James" },
       { role: "textbox", name: "lastName", value: "DVStest" },
       { role: "textbox", name: "dob", value: "01/09/1988" },
-      {
-        role: "textbox",
-        name: "street",
-        value: "190 Neerim Rd CARNEGIE VIC 3163",
-      },
       {
         role: "textbox",
         name: "companyName",
@@ -322,11 +327,6 @@ const auAddMember = [
       { role: "textbox", name: "middleName", value: "Anne" },
       { role: "textbox", name: "lastName", value: "COWEY" },
       { role: "textbox", name: "dob", value: "25/03/1952" },
-      {
-        role: "textbox",
-        name: "street",
-        value: "100 ARTHUR STREET NORTH SYDNEY NSW 2060",
-      },
       { role: "textbox", name: "companyName", value: "Cowey & Co Holdings" },
       { role: "textbox", name: "registrationNumber", value: "23670894512" },
     ],
@@ -342,11 +342,6 @@ const ukAddMember = [
       { role: "textbox", name: "middleName", value: "Rose" },
       { role: "textbox", name: "lastName", value: "West" },
       { role: "textbox", name: "dob", value: "12/03/1989" },
-      {
-        role: "textbox",
-        name: "street",
-        value: "42 High Street LONDON SW1A 1AA",
-      },
       { role: "textbox", name: "companyName", value: "West Consulting Ltd" },
       { role: "textbox", name: "registrationNumber", value: "OC304073" },
     ],
@@ -359,11 +354,6 @@ const ukAddMember = [
       { role: "textbox", name: "middleName", value: "William" },
       { role: "textbox", name: "lastName", value: "Hughes" },
       { role: "textbox", name: "dob", value: "08/11/1984" },
-      {
-        role: "textbox",
-        name: "street",
-        value: "10 Castle Terrace EDINBURGH EH1 2DP",
-      },
       { role: "textbox", name: "companyName", value: "Hughes Trading LLP" },
       { role: "textbox", name: "registrationNumber", value: "GE000124" },
     ],

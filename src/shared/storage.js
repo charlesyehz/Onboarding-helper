@@ -13,14 +13,23 @@ export const EMAIL_DOMAIN = "@myzeller.com";
 const ticketCounterKey = (ticketNumber) => `ticket-${ticketNumber}`;
 
 function hasChromeStorage() {
-  return typeof chrome !== "undefined" && chrome.storage?.local;
+  return typeof chrome !== "undefined" && chrome.runtime?.id && chrome.storage?.local;
 }
+
+const isContextInvalidated = (error) =>
+  typeof error?.message === "string" &&
+  error.message.toLowerCase().includes("context invalidated");
 
 function storageGet(keys) {
   if (hasChromeStorage()) {
     return new Promise((resolve, reject) => {
       chrome.storage.local.get(keys ?? null, (result) => {
         if (chrome.runtime.lastError) {
+          if (isContextInvalidated(chrome.runtime.lastError)) {
+            console.warn("[Storage] Context invalidated - falling back to localStorage");
+            resolve(fallbackGet(keys));
+            return;
+          }
           reject(chrome.runtime.lastError);
           return;
         }
@@ -37,6 +46,12 @@ function storageSet(items) {
     return new Promise((resolve, reject) => {
       chrome.storage.local.set(items, () => {
         if (chrome.runtime.lastError) {
+          if (isContextInvalidated(chrome.runtime.lastError)) {
+            console.warn("[Storage] Context invalidated - writing to localStorage fallback");
+            fallbackSet(items);
+            resolve();
+            return;
+          }
           reject(chrome.runtime.lastError);
           return;
         }
@@ -54,6 +69,12 @@ function storageRemove(keys) {
     return new Promise((resolve, reject) => {
       chrome.storage.local.remove(keys, () => {
         if (chrome.runtime.lastError) {
+          if (isContextInvalidated(chrome.runtime.lastError)) {
+            console.warn("[Storage] Context invalidated - removing from localStorage fallback");
+            fallbackRemove(keys);
+            resolve();
+            return;
+          }
           reject(chrome.runtime.lastError);
           return;
         }

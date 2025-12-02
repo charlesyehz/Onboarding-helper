@@ -1,8 +1,9 @@
 (async function initContentFeatures() {
-  const [{ applyValue }, storage, widgetConfig] = await Promise.all([
+  const [{ applyValue }, storage, widgetConfig, routes] = await Promise.all([
     import(chrome.runtime.getURL("src/shared/domEvents.js")),
     import(chrome.runtime.getURL("src/shared/storage.js")),
     import(chrome.runtime.getURL("src/config/widgetConfig.js")),
+    import(chrome.runtime.getURL("src/config/routes.js")),
   ]);
 
   // Track active widget controllers so we can clean them up on route change
@@ -31,7 +32,8 @@
         const controllers = await initUniversalWidget(
           applyValue,
           storage,
-          widgetConfig
+          widgetConfig,
+          routes
         );
         if (controllers && Array.isArray(controllers)) {
           activeControllers = controllers;
@@ -120,7 +122,7 @@ function initSettingsOverlayBridge() {
   });
 }
 
-async function initUniversalWidget(applyValue, storage, widgetConfig) {
+async function initUniversalWidget(applyValue, storage, widgetConfig, routes) {
   const currentRoute = widgetConfig.detectRoute(window.location.pathname);
   if (!currentRoute) {
     return [];
@@ -141,6 +143,7 @@ async function initUniversalWidget(applyValue, storage, widgetConfig) {
       fieldConfig,
       routeId: currentRoute,
       region: currentRegion,
+      routes,
     });
 
     try {
@@ -234,6 +237,7 @@ function createUniversalWidgetController({
   fieldConfig,
   routeId,
   region,
+  routes,
 }) {
   let observer = null;
   let enabled = false;
@@ -291,6 +295,7 @@ function createUniversalWidgetController({
       fieldConfig,
       routeId,
       region,
+      routes,
       () => attachedWidgets.delete(field)
     );
     attachedWidgets.set(field, cleanup);
@@ -496,6 +501,7 @@ async function createUniversalWidget(
   fieldConfig,
   routeId,
   region,
+  routes,
   onCleanup
 ) {
   const container = document.createElement("div");
@@ -561,6 +567,16 @@ async function createUniversalWidget(
 
   const normalizeFieldKey = (key = "") =>
     typeof key === "string" ? key.trim().toLowerCase().replace(/\s+/g, "") : "";
+
+  // Allow per-route overrides so we can skip retries on static forms
+  const fieldSearchAttempts =
+    typeof fieldConfig.fieldSearchAttempts === "number"
+      ? Math.max(1, fieldConfig.fieldSearchAttempts)
+      : 5;
+  const fieldSearchDelayMs =
+    typeof fieldConfig.fieldSearchDelayMs === "number"
+      ? Math.max(0, fieldConfig.fieldSearchDelayMs)
+      : 100;
 
   const shouldTriggerPrefillAction = (action, normalizedKey) => {
     if (!Array.isArray(action?.fields) || !normalizedKey) {
@@ -677,13 +693,14 @@ async function createUniversalWidget(
     if (!fieldKey) {
       return null;
     }
-    const maxAttempts = 5;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    for (let attempt = 0; attempt < fieldSearchAttempts; attempt++) {
       const target = locateFieldByKey(fieldKey);
       if (target) {
         return target;
       }
-      await delay(100);
+      if (attempt < fieldSearchAttempts - 1 && fieldSearchDelayMs > 0) {
+        await delay(fieldSearchDelayMs);
+      }
     }
     return null;
   };
@@ -842,7 +859,21 @@ async function createUniversalWidget(
 
         // Check if this is a multi-field persona
         if (fieldConfig.multiField && selectedPersona.fields.length > 1) {
-          // Fill multiple fields
+          // First, clear all fields defined in the route schema
+          const routeSchema = routes.ROUTES?.find(
+            (r) => r.id === fieldConfig.personaRoute
+          );
+          if (routeSchema?.fieldSchema) {
+            for (const schemaField of routeSchema.fieldSchema) {
+              const fieldKey = schemaField.name;
+              const targetInput = (await findFieldWithRetry(fieldKey)) || null;
+              if (targetInput) {
+                applyValue(targetInput, "");
+              }
+            }
+          }
+
+          // Then fill the fields from the persona
           for (const personaField of selectedPersona.fields) {
             const fieldKey = personaField.target || personaField.name;
             if (!fieldKey || !personaField.value) {
@@ -866,23 +897,11 @@ async function createUniversalWidget(
           closeTooltip();
         } else {
           // Single field (business info, address)
+          // Always fill the field that triggered the widget
           const personaField = selectedPersona.fields[0];
           const fieldValue = personaField?.value;
-          const targetKey = personaField?.target || personaField?.name;
           if (fieldValue) {
-            if (targetKey) {
-              await ensureFieldAccess(targetKey);
-              const targetInput =
-                (await findFieldWithRetry(targetKey)) ||
-                locateFieldByKey(targetKey);
-              if (targetInput) {
-                applyValue(targetInput, fieldValue);
-              } else {
-                applyValue(field, fieldValue);
-              }
-            } else {
-              applyValue(field, fieldValue);
-            }
+            applyValue(field, fieldValue);
             closeTooltip();
           }
         }

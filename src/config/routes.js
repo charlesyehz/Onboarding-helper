@@ -104,7 +104,6 @@ export const ROUTES = [
       { role: "textbox", name: "middleName", placeholder: "Middle name" },
       { role: "textbox", name: "lastName", placeholder: "Last name" },
       { role: "textbox", name: "dob", placeholder: "DD/MM/YYYY" },
-      { role: "textbox", name: "street", placeholder: "Street address" },
       { role: "textbox", name: "companyName", placeholder: "Company name" },
       {
         role: "textbox",

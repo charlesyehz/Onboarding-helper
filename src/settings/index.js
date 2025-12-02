@@ -8,8 +8,8 @@ import {
 import { ROUTES } from "../config/routes.js";
 
 const ROUTE_TAB_ORDER = [
-  "registered-office-address",
   "business-info",
+  "registered-office-address",
   "add-member",
   "kyc-confirm-details",
   "kyc-share-info",
@@ -341,11 +341,16 @@ function openPersonaModal() {
     label.textContent = field.name;
 
     const input = document.createElement("input");
+    const isDateField = isDateSchemaField(field);
     input.type = "text";
     input.id = `field-${index}`;
     input.name = field.name;
     input.placeholder = field.placeholder || `Enter ${field.name}`;
     input.dataset.role = field.role;
+    if (isDateField) {
+      input.dataset.dateMask = "true";
+      attachDateMask(input);
+    }
 
     // Pre-fill if editing
     if (editingPersona) {
@@ -353,7 +358,9 @@ function openPersonaModal() {
         (f) => f.name === field.name
       );
       if (existingField) {
-        input.value = existingField.value;
+        input.value = isDateField
+          ? formatDateDisplay(existingField.value)
+          : existingField.value;
       }
     }
 
@@ -495,6 +502,70 @@ function generatePersonaId(label) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function isDateSchemaField(field = {}) {
+  const placeholder = field.placeholder?.toLowerCase?.() || "";
+  const name = field.name?.toLowerCase?.() || "";
+  return (
+    placeholder.includes("dd/mm") ||
+    name.includes("dob") ||
+    name.includes("date of birth")
+  );
+}
+
+function formatDateDisplay(value = "") {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  const day = digits.slice(0, 2);
+  const month = digits.slice(2, 4);
+  const year = digits.slice(4, 8);
+  if (!day) {
+    return "";
+  }
+  if (!month) {
+    return day;
+  }
+  if (!year) {
+    return `${day}/${month}`;
+  }
+  return `${day}/${month}/${year}`;
+}
+
+function caretIndexForDigitCount(formatted, digitCount) {
+  if (digitCount <= 0) {
+    return 0;
+  }
+  let digitsSeen = 0;
+  for (let index = 0; index < formatted.length; index += 1) {
+    if (/\d/.test(formatted[index])) {
+      digitsSeen += 1;
+      if (digitsSeen === digitCount) {
+        return index + 1;
+      }
+    }
+  }
+  return formatted.length;
+}
+
+function attachDateMask(input) {
+  const handleInput = () => {
+    const raw = input.value || "";
+    const selection = input.selectionStart ?? raw.length;
+    const digitsBeforeCaret = raw
+      .slice(0, selection)
+      .replace(/\D/g, "").length;
+    const formatted = formatDateDisplay(raw);
+    if (formatted === raw) {
+      return;
+    }
+    input.value = formatted;
+    const nextCaret = caretIndexForDigitCount(formatted, digitsBeforeCaret);
+    requestAnimationFrame(() => {
+      input.setSelectionRange(nextCaret, nextCaret);
+    });
+  };
+
+  input.addEventListener("input", handleInput);
 }
 
 // ============================================================================

@@ -15,77 +15,77 @@ export const WIDGET_ROUTES = {
     fields: [
       {
         selectors: [
-          '#signup-email-input',
+          "#signup-email-input",
           'input[id="email"]',
           'input[name="email"]',
           'input[type="email"]',
         ],
-        widgetType: 'email',
-        buttonLabel: 'Prefill email',
-        hintText: 'Uses your saved prefix + ticket.',
+        widgetType: "email",
+        buttonLabel: "Prefill email",
+        hintText: "Uses your saved prefix + ticket.",
       },
     ],
   },
 
   // Business Information route (new)
-  'business-info': {
+  "business-info": {
     urlPattern: /\/onboarding\/your-business-information/i,
     fields: [
       {
-        selectors: ['#abnOrAcn'],
-        widgetType: 'persona-select',
-        personaRoute: 'business-info',
-        tooltipLabel: 'Select Entity Type:',
-        buttonLabel: 'Prefill ABN',
+        selectors: ["#abnOrAcn"],
+        widgetType: "persona-select",
+        personaRoute: "business-info",
+        tooltipLabel: "Select Entity Type:",
+        buttonLabel: "Prefill ABN",
       },
     ],
   },
 
   // Phone registration route (new)
-  'register-phone': {
+  "register-phone": {
     urlPattern: /\/register-phone/i,
     fields: [
       {
-        selectors: ['#phone'],
-        widgetType: 'phone',
-        buttonLabel: 'Prefill Phone',
-        hintText: 'Uses saved phone number',
+        selectors: ["#phone"],
+        widgetType: "phone",
+        buttonLabel: "Prefill Phone",
+        hintText: "Uses saved phone number",
       },
     ],
   },
 
   // KYC confirm details route
-  'kyc-confirm-details': {
+  "kyc-confirm-details": {
     urlPattern: /\/onboarding\/kyc\/confirm-your-details/i,
     fields: [
       {
-        selectors: ['#fullName', 'input[name="fullName"]'],
-        widgetType: 'persona-select',
-        personaRoute: 'kyc-confirm-details',
-        tooltipLabel: 'Select Persona:',
-        buttonLabel: 'Prefill Details',
+        selectors: ["#fullName", 'input[name="fullName"]'],
+        widgetType: "persona-select",
+        personaRoute: "kyc-confirm-details",
+        tooltipLabel: "Select Persona:",
+        buttonLabel: "Prefill Details",
         multiField: true,
         prefillActions: [
           {
-            id: 'kyc-confirm-open-name-modal',
-            type: 'click',
-            selectors: ['#fullName', 'input[name="fullName"]'],
+            id: "kyc-confirm-open-name-modal",
+            type: "click",
+            selectors: ["#fullName", 'input[name="fullName"]'],
             fields: [
-              'firstName',
-              'First Name',
-              'middleName',
-              'Middle Name',
-              'lastName',
-              'Last Name',
+              "firstName",
+              "First Name",
+              "middleName",
+              "Middle Name",
+              "lastName",
+              "Last Name",
             ],
             waitForMs: 300,
           },
           {
-            id: 'kyc-confirm-open-address-modal',
-            type: 'click',
-            textMatch: 'enter address manually',
+            id: "kyc-confirm-open-address-modal",
+            type: "click",
+            textMatch: "enter address manually",
             textSelector: 'button, [role="button"]',
-            fields: ['Address', 'street', 'Street'],
+            fields: ["Address", "street", "Street"],
             waitForMs: 300,
           },
         ],
@@ -94,40 +94,98 @@ export const WIDGET_ROUTES = {
   },
 
   // Registered office address route
-  'registered-office-address': {
+  "registered-office-address": {
     urlPattern: /\/registered-office-address/i,
     fields: [
       {
         selectors: [
-          '#registeredAddress\\.street1',
+          "#registeredAddress\\.street1",
           'input[name="registeredAddress.street1"]',
+          "#businessAddress\\.street1",
+          'input[name="businessAddress.street1"]',
         ],
-        widgetType: 'persona-select',
-        personaRoute: 'registered-office-address',
-        tooltipLabel: 'Select Address:',
-        buttonLabel: 'Prefill Address',
+        widgetType: "persona-select",
+        personaRoute: "registered-office-address",
+        tooltipLabel: "Select Address:",
+        buttonLabel: "Prefill Address",
       },
     ],
   },
 
   // Add member route
-  'add-member': {
+  "add-member": {
     urlPattern: /\/add-member/i,
     fields: [
       {
         selectors: [
-          '#firstName',
+          "#firstName",
           'input[name="firstName"]',
-          '#companyName',
+          "#companyName",
           'input[name="companyName"]',
           'input[name="member.firstName"]',
           'input[name="member.companyName"]',
         ],
-        widgetType: 'persona-select',
-        personaRoute: 'add-member',
-        tooltipLabel: 'Select Member:',
-        buttonLabel: 'Prefill All Fields',
+        widgetType: "persona-select",
+        personaRoute: "add-member",
+        tooltipLabel: "Select Member:",
+        buttonLabel: "Prefill All Fields",
         multiField: true, // This persona fills multiple fields
+        fieldSearchAttempts: 1, // Skip retries so we don't wait on missing fields
+      },
+      {
+        selectors: [
+          "#street",
+          "#street1",
+          'input[name="street"]',
+          'input[name="street1"]',
+          'input[name="address.street"]',
+          'input[name="address.street1"]',
+          'input[name="member.address.street"]',
+          'input[name="member.address.street1"]',
+        ],
+        widgetType: "persona-select",
+        personaRoute: "registered-office-address",
+        tooltipLabel: "Select Address:",
+        buttonLabel: "Prefill Street",
+      },
+    ],
+  },
+
+  // Edit member route (shares personas with add-member)
+  "edit-member": {
+    urlPattern: /\/edit-member/i,
+    fields: [
+      {
+        selectors: [
+          "#firstName",
+          'input[name="firstName"]',
+          "#companyName",
+          'input[name="companyName"]',
+          'input[name="member.firstName"]',
+          'input[name="member.companyName"]',
+        ],
+        widgetType: "persona-select",
+        personaRoute: "add-member", // Share same personas as add-member
+        tooltipLabel: "Select Member:",
+        buttonLabel: "Prefill All Fields",
+        multiField: true,
+        fieldSearchAttempts: 1,
+      },
+      {
+        selectors: [
+          "#street",
+          "#street1",
+          'input[name="street"]',
+          'input[name="street1"]',
+          'input[name="address.street"]',
+          'input[name="address.street1"]',
+          'input[name="member.address.street"]',
+          'input[name="member.address.street1"]',
+        ],
+        widgetType: "persona-select",
+        personaRoute: "registered-office-address",
+        tooltipLabel: "Select Address:",
+        buttonLabel: "Prefill Street",
       },
     ],
   },

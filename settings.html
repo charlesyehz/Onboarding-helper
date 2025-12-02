@@ -19,7 +19,7 @@
         <div class="header-content">
           <img src="images/zeller-logo.png" alt="Zeller" class="header-logo" />
           <div class="header-text">
-            <h1>Zeller Helper Settings</h1>
+            <h1>Zeller Onboarding Helper Settings</h1>
             <p>
               Customize how the Zeller onboarding helper works in your browser.
             </p>
@@ -53,9 +53,7 @@
               <div class="setting-item">
                 <div class="setting-info">
                   <h3>Inline Autofill Widget</h3>
-                  <p>
-                    Show sparkle icon next to input fields for quick prefill
-                  </p>
+                  <p>Show 👀 icon next to input fields for quick prefill</p>
                 </div>
                 <label class="toggle-switch">
                   <input type="checkbox" id="widget-toggle" />
@@ -68,9 +66,7 @@
               <div class="setting-item">
                 <div class="setting-info">
                   <h3>Reset Settings</h3>
-                  <p>
-                    Reset all settings and personas to default values
-                  </p>
+                  <p>Reset all settings and personas to default values</p>
                 </div>
                 <button class="btn-danger" id="reset-settings-btn">
                   <i class="fas fa-undo"></i>
@@ -135,11 +131,11 @@
         <div class="modal-body">
           <form id="persona-form">
             <div class="form-group">
-              <label for="persona-label">Entity Type</label>
+              <label for="persona-label">Persona Name</label>
               <input
                 type="text"
                 id="persona-label"
-                placeholder="e.g., Company XYZ"
+                placeholder="e.g., Any persona name that will show in the config panel"
                 required
               />
             </div>
@@ -200,10 +196,11 @@
             Are you sure you want to reset all settings and personas to their
             default values?
           </p>
-          <p class="text-muted">
-            This will:
-          </p>
-          <ul class="text-muted" style="margin-left: 1.5rem; margin-top: 0.5rem;">
+          <p class="text-muted">This will:</p>
+          <ul
+            class="text-muted"
+            style="margin-left: 1.5rem; margin-top: 0.5rem"
+          >
             <li>Enable the inline widget</li>
             <li>Restore default AU and UK personas</li>
             <li>Remove any custom personas you've added</li>
