@@ -17,6 +17,8 @@ export const STORAGE_CONTEXT_INVALIDATED_EVENT = "STORAGE_CONTEXT_INVALIDATED";
 const STORAGE_UNAVAILABLE_CODE = "STORAGE_UNAVAILABLE";
 let cachedPhoneNumber = null;
 let storageUnavailableNotified = false;
+const personasCache = new Map();
+let personasCacheListenersInitialized = false;
 
 const ticketCounterKey = (ticketNumber) => `ticket-${ticketNumber}`;
 
@@ -206,6 +208,56 @@ function fallbackRemove(keys) {
   });
 }
 
+function invalidatePersonasCache(region) {
+  if (region) {
+    personasCache.delete(region);
+    return;
+  }
+  personasCache.clear();
+}
+
+function getCachedRegionPersonas(region) {
+  if (!region) {
+    return null;
+  }
+  return personasCache.get(region) || null;
+}
+
+function setCachedRegionPersonas(region, personas) {
+  if (!region) {
+    return;
+  }
+  personasCache.set(region, personas);
+}
+
+function initializePersonasCacheInvalidation() {
+  if (personasCacheListenersInitialized) {
+    return;
+  }
+  if (typeof chrome === "undefined") {
+    return;
+  }
+  personasCacheListenersInitialized = true;
+
+  if (chrome.runtime?.onMessage?.addListener) {
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message?.type === "SETTINGS_UPDATED") {
+        invalidatePersonasCache();
+      }
+    });
+  }
+
+  if (chrome.storage?.onChanged?.addListener) {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName === "local" && changes?.[SETTINGS_KEY]) {
+        invalidatePersonasCache();
+      }
+    });
+  }
+}
+
+initializePersonasCacheInvalidation();
+
 export async function loadEmailSettings() {
   const data = await storageGet([EMAIL_PREFIX_KEY, LAST_TICKET_KEY]);
   return {
@@ -220,6 +272,7 @@ export async function loadPopupState() {
     LAST_TICKET_KEY,
     LAST_EMAIL_KEY,
     PHONE_NUMBER_KEY,
+    SELECTED_REGION_KEY,
   ]);
 
   return {
@@ -227,6 +280,7 @@ export async function loadPopupState() {
     ticketNumber: data[LAST_TICKET_KEY] || "",
     lastEmail: data[LAST_EMAIL_KEY] || "",
     phoneNumber: data[PHONE_NUMBER_KEY] || "",
+    region: data[SELECTED_REGION_KEY] || "AU",
   };
 }
 
@@ -404,8 +458,10 @@ export async function loadSettings() {
       );
       if (storedSettings.version !== SETTINGS_VERSION) {
         await storageSet({ [SETTINGS_KEY]: migrated });
+        invalidatePersonasCache();
       } else if (modified) {
         await storageSet({ [SETTINGS_KEY]: migrated });
+        invalidatePersonasCache();
       }
       return migrated;
     }
@@ -416,6 +472,7 @@ export async function loadSettings() {
       await ensureRegisterPhonePersona(legacy);
     if (legacyModified) {
       await storageSet({ [SETTINGS_KEY]: migratedLegacy });
+      invalidatePersonasCache();
     }
     return migratedLegacy;
   } catch (error) {
@@ -426,6 +483,7 @@ export async function loadSettings() {
     const defaults = getDefaultSettings();
     const { settings: migrated } = await ensureRegisterPhonePersona(defaults);
     await storageSet({ [SETTINGS_KEY]: migrated });
+    invalidatePersonasCache();
     return migrated;
   }
 }
@@ -433,6 +491,7 @@ export async function loadSettings() {
 export async function saveSettings(settings) {
   const normalized = normalizeSettingsStructure(settings);
   await storageSet({ [SETTINGS_KEY]: normalized });
+  invalidatePersonasCache();
   return normalized;
 }
 
@@ -440,9 +499,15 @@ export async function getPersonasByRegion(region) {
   if (!region) {
     return {};
   }
+  const cached = getCachedRegionPersonas(region);
+  if (cached) {
+    return mergeRegionPersonas({}, cached);
+  }
   const settings = await loadSettings();
   const regionData = settings.personas?.[region] ?? {};
-  return mergeRegionPersonas({}, regionData);
+  const cloned = mergeRegionPersonas({}, regionData);
+  setCachedRegionPersonas(region, cloned);
+  return mergeRegionPersonas({}, cloned);
 }
 
 export async function savePersonas(region, personas = {}) {
@@ -458,7 +523,9 @@ export async function savePersonas(region, personas = {}) {
     await storageSet({ [PHONE_NUMBER_KEY]: phoneValue || "" });
   }
 
-  return updated.personas[region];
+  const clonedRegion = mergeRegionPersonas({}, updated.personas?.[region] || {});
+  setCachedRegionPersonas(region, clonedRegion);
+  return clonedRegion;
 }
 
 export async function toggleInlineWidget(enabled) {
@@ -539,6 +606,7 @@ async function migrateLegacyRoutes(hasMigrated) {
   const defaults = getDefaultSettings();
   if (hasMigrated) {
     await storageSet({ [SETTINGS_KEY]: defaults });
+    invalidatePersonasCache();
     return defaults;
   }
 
@@ -551,6 +619,7 @@ async function migrateLegacyRoutes(hasMigrated) {
     [SETTINGS_KEY]: defaults,
     [SETTINGS_MIGRATION_KEY]: true,
   });
+  invalidatePersonasCache();
   return defaults;
 }
 
@@ -670,6 +739,7 @@ async function syncRegisterPhonePersona(region, phoneNumber) {
   regionStore[REGISTER_PHONE_ROUTE_ID] = existingList;
   settings.personas[region] = regionStore;
   await saveSettings(settings);
+  invalidatePersonasCache(region);
   broadcastSettingsUpdate({});
 }
 

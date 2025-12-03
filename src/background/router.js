@@ -78,6 +78,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "GET_CURRENT_TAB_ID") {
+    const currentTabId = sender?.tab?.id ?? null;
+    sendResponse({ tabId: currentTabId });
+    return true;
+  }
+
   if (message?.type === "SETTINGS_UPDATED") {
     broadcastSettingsUpdate(message.payload);
   }

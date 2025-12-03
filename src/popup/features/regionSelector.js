@@ -7,15 +7,15 @@ const REGION_FLAGS = {
 };
 const FALLBACK_FLAG = "🌍";
 
-export async function initRegionSelector() {
+export async function initRegionSelector(preloadedRegion = null) {
   const regionBtn = document.getElementById("region-btn");
   const regionDropdown = document.getElementById("region-dropdown");
   const currentRegionSpan = document.getElementById("current-region");
   const currentRegionFlag = document.getElementById("current-region-flag");
   const regionOptions = document.querySelectorAll(".region-option");
 
-  // Load saved region
-  const savedRegion = await getSelectedRegion();
+  // Use preloaded region or load from storage
+  const savedRegion = preloadedRegion || (await getSelectedRegion());
   setCurrentRegionDisplay(savedRegion);
 
   // Toggle dropdown

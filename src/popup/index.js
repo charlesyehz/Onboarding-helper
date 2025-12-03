@@ -12,54 +12,57 @@ import {
 
 document.addEventListener("DOMContentLoaded", () => {
   initStorageWarningBridge();
+  initSettingsLauncher();
+  initPopup();
+});
+
+async function initPopup() {
   const activeTabPromise = getActiveTab();
 
+  // Start route panel init independently (doesn't need preloaded state)
   activeTabPromise
     .then((activeTab) => initRoutePanel(activeTab))
     .catch((error) =>
       console.error("[Popup] Failed to initialise route panel", error)
     );
 
-  (async () => {
-    try {
-      const state = await loadPopupState();
-      await initEmailManager(state);
-    } catch (error) {
-      if (isStorageUnavailableError(error)) {
-        showStorageWarning(error.message);
-        return;
-      }
-      console.error("[Popup] Failed to initialise email manager", error);
-      try {
-        await initEmailManager();
-      } catch (initError) {
-        if (isStorageUnavailableError(initError)) {
-          showStorageWarning(initError.message);
-          return;
-        }
-        console.error(
-          "[Popup] Failed to initialise email manager fallback",
-          initError
-        );
-      }
-    }
-  })();
-
+  // Batch load all required state in a single storage call
   try {
+    const state = await loadPopupState();
+
+    // Initialize all components in parallel with preloaded state
+    await Promise.all([
+      initEmailManager(state),
+      initRegionSelector(state.region),
+      initRecordingManager(),
+    ]);
+
+    // Init login helper (synchronous, no storage needed)
     initLoginHelper();
   } catch (error) {
-    console.error("[Popup] Failed to initialise login helper", error);
-  }
+    if (isStorageUnavailableError(error)) {
+      showStorageWarning(error.message);
+      return;
+    }
+    console.error("[Popup] Failed to initialise components", error);
 
-  try {
-    initRecordingManager();
-  } catch (error) {
-    console.error("[Popup] Failed to initialise recording manager", error);
+    // Fallback: try to init without preloaded state
+    try {
+      await Promise.all([
+        initEmailManager(),
+        initRegionSelector(),
+        initRecordingManager(),
+      ]);
+      initLoginHelper();
+    } catch (fallbackError) {
+      if (isStorageUnavailableError(fallbackError)) {
+        showStorageWarning(fallbackError.message);
+        return;
+      }
+      console.error("[Popup] Fallback initialization failed", fallbackError);
+    }
   }
-
-  initRegionSelector();
-  initSettingsLauncher();
-});
+}
 
 function initSettingsLauncher() {
   const button = document.getElementById("settings-btn");

@@ -199,9 +199,11 @@ export async function stopRecording() {
     recorderState.cleanupTimeoutId = setTimeout(() => {
       if (recorderState.isRecording) {
         console.warn("[Recorder] Recording cleanup timeout - forcing cleanup");
+        const targetTabId = recorderState.tabId;
         cleanupRecording();
         broadcastMessage({
           type: "RECORDING_STOPPED",
+          tabId: targetTabId,
           error: "Recording stopped but cleanup timed out",
         });
       }
@@ -211,10 +213,12 @@ export async function stopRecording() {
   } catch (error) {
     console.error("[Recorder] Failed to stop recording:", error);
     // ALWAYS cleanup on error to prevent stuck state
+    const targetTabId = recorderState.tabId;
     cleanupRecording();
     // Still broadcast stop message so UI updates
     broadcastMessage({
       type: "RECORDING_STOPPED",
+      tabId: targetTabId,
       error: error.message || "Recording stopped with errors",
     });
     throw error;
@@ -227,9 +231,11 @@ export async function stopRecording() {
  */
 export function forceStopRecording() {
   console.warn("[Recorder] Force stopping recording");
+  const targetTabId = recorderState.tabId;
   cleanupRecording();
   broadcastMessage({
     type: "RECORDING_STOPPED",
+    tabId: targetTabId,
     error: "Recording force-stopped by user",
   });
   return { success: true, forced: true };
@@ -254,6 +260,7 @@ export async function pauseRecording() {
 
       broadcastMessage({
         type: "RECORDING_PAUSED",
+        tabId: recorderState.tabId,
         pauseTime: recorderState.pauseStartTime,
         pausedDuration: recorderState.pausedDuration,
       });
@@ -292,6 +299,7 @@ export async function resumeRecording() {
 
       broadcastMessage({
         type: "RECORDING_RESUMED",
+        tabId: recorderState.tabId,
         resumeTime,
         pausedDuration: recorderState.pausedDuration,
       });
@@ -371,6 +379,7 @@ export function getRecorderState() {
  * Handle recording completion from offscreen document
  */
 export async function handleRecordingComplete(downloadUrl, mimeType, sizeBytes) {
+  const targetTabId = recorderState.tabId;
   const revokeDownloadUrl = (() => {
     let revoked = false;
     return () => {
@@ -413,6 +422,7 @@ export async function handleRecordingComplete(downloadUrl, mimeType, sizeBytes) 
       }
       broadcastMessage({
         type: "RECORDING_STOPPED",
+        tabId: targetTabId,
         filename: filename,
         duration: duration,
       });
@@ -422,6 +432,7 @@ export async function handleRecordingComplete(downloadUrl, mimeType, sizeBytes) 
     const notifyError = (errorMessage) => {
       broadcastMessage({
         type: "RECORDING_ERROR",
+        tabId: targetTabId,
         error: errorMessage || "Failed to save recording",
       });
     };
@@ -481,6 +492,7 @@ export async function handleRecordingComplete(downloadUrl, mimeType, sizeBytes) 
     revokeDownloadUrl();
     broadcastMessage({
       type: "RECORDING_ERROR",
+      tabId: targetTabId,
       error: error.message || "Failed to save recording",
     });
     cleanupRecording();
@@ -593,8 +605,17 @@ function cleanupRecording() {
  * Broadcast message
  */
 function broadcastMessage(message) {
+  const targetTabId =
+    typeof message?.tabId === "number" ? message.tabId : null;
+
   chrome.tabs.query({}, (tabs) => {
     tabs.forEach((tab) => {
+      if (typeof tab.id !== "number") {
+        return;
+      }
+      if (targetTabId !== null && tab.id !== targetTabId) {
+        return;
+      }
       chrome.tabs.sendMessage(tab.id, message).catch(() => {});
     });
   });

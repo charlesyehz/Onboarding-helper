@@ -1,7 +1,6 @@
 import {
   clearAutofillHistory,
   generateSignupEmail,
-  getSelectedRegion,
   isStorageUnavailableError,
   loadPopupState,
   saveEmailSettings,
@@ -24,6 +23,7 @@ export async function initEmailManager(preloadedState = null) {
     ticketNumber = "",
     phoneNumber = "",
     lastEmail = "",
+    region = "AU",
   } = state || {};
 
   prefixInput.value = prefix;
@@ -44,7 +44,7 @@ export async function initEmailManager(preloadedState = null) {
 
   let phoneSaveTimeout = null;
   let lastSavedPhoneNumber = phoneNumber?.trim() || "";
-  let currentRegion = await getSelectedRegion().catch(() => "AU");
+  let currentRegion = region;
   applyPhoneRegionState(currentRegion);
 
   window.addEventListener("regionChanged", (event) => {

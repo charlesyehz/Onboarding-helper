@@ -3,7 +3,7 @@
   const recordingOverlay = await import(
     chrome.runtime.getURL("src/content/recordingOverlay.js")
   );
-  initRecordingOverlay(recordingOverlay);
+  await initRecordingOverlay(recordingOverlay);
 
   const { isAllowedLocation } = await import(
     chrome.runtime.getURL("src/config/allowedOrigins.js")
@@ -948,21 +948,7 @@ async function createUniversalWidget(
 
         // Check if this is a multi-field persona
         if (fieldConfig.multiField && selectedPersona.fields.length > 1) {
-          // First, clear all fields defined in the route schema
-          const routeSchema = routes.ROUTES?.find(
-            (r) => r.id === fieldConfig.personaRoute
-          );
-          if (routeSchema?.fieldSchema) {
-            for (const schemaField of routeSchema.fieldSchema) {
-              const fieldKey = schemaField.name;
-              const targetInput = (await findFieldWithRetry(fieldKey)) || null;
-              if (targetInput) {
-                applyValue(targetInput, "");
-              }
-            }
-          }
-
-          // Then fill the fields from the persona
+          // Fill all fields defined in the persona (matching popup autofill behavior)
           for (const personaField of selectedPersona.fields) {
             const fieldKey = personaField.target || personaField.name;
             if (!fieldKey || !personaField.value) {
@@ -1098,31 +1084,67 @@ async function resolvePhonePrefillValue({
 /**
  * Initialize recording overlay message listeners
  */
-function initRecordingOverlay(recordingOverlay) {
+async function initRecordingOverlay(recordingOverlay) {
   console.log("[Content] Recording overlay initialized");
 
-  // Check if recording is already in progress when page loads
-  chrome.runtime
-    .sendMessage({ type: "GET_RECORDER_STATE" })
-    .then((state) => {
-      console.log("[Content] Got recorder state:", state);
-      if (state && state.isRecording) {
-        console.log("[Content] Recording in progress, injecting overlay");
-        recordingOverlay.injectOverlay(state.startTime, {
-          isPaused: state.isPaused,
-          pausedDuration: state.pausedDuration,
-          pauseStartTime: state.pauseStartTime,
-        });
-      }
-    })
-    .catch((error) => {
-      console.log("[Content] Failed to get recorder state:", error);
+  let currentTabId = null;
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: "GET_CURRENT_TAB_ID",
     });
+    if (typeof response?.tabId === "number") {
+      currentTabId = response.tabId;
+    }
+  } catch (error) {
+    console.warn("[Content] Failed to resolve current tab ID:", error);
+  }
+
+  const matchesRecordedTab = (messageTabId) => {
+    if (typeof currentTabId !== "number") {
+      return true;
+    }
+    if (typeof messageTabId !== "number") {
+      return false;
+    }
+    return messageTabId === currentTabId;
+  };
+
+  // Check if recording is already in progress when page loads
+  try {
+    const state = await chrome.runtime.sendMessage({
+      type: "GET_RECORDER_STATE",
+    });
+    console.log("[Content] Got recorder state:", state);
+    if (state?.isRecording && matchesRecordedTab(state.tabId)) {
+      console.log("[Content] Recording in progress, injecting overlay");
+      recordingOverlay.injectOverlay(state.startTime, {
+        isPaused: state.isPaused,
+        pausedDuration: state.pausedDuration,
+        pauseStartTime: state.pauseStartTime,
+      });
+    }
+  } catch (error) {
+    console.log("[Content] Failed to get recorder state:", error);
+  }
 
   // Listen for recording state changes
   chrome.runtime.onMessage.addListener((message) => {
     console.log("[Content] Received message:", message.type);
-    if (message.type === "RECORDING_STARTED" || message.type === "SHOW_RECORDING_OVERLAY") {
+    if (message.type === "SHOW_RECORDING_OVERLAY") {
+      console.log("[Content] SHOW_RECORDING_OVERLAY received, injecting overlay");
+      recordingOverlay.injectOverlay(message.startTime, {
+        isPaused: message.isPaused,
+        pausedDuration: message.pausedDuration,
+        pauseStartTime: message.pauseStartTime,
+      });
+      return;
+    }
+
+    if (!matchesRecordedTab(message.tabId)) {
+      return;
+    }
+
+    if (message.type === "RECORDING_STARTED") {
       console.log("[Content] RECORDING_STARTED/SHOW_RECORDING_OVERLAY received, injecting overlay");
       recordingOverlay.injectOverlay(message.startTime, {
         isPaused: message.isPaused,
