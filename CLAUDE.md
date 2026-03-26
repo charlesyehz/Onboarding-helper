@@ -16,6 +16,11 @@ This is a Chrome extension (Manifest V3) designed to assist with Zeller's onboar
 
 ## Development Commands
 
+```bash
+npm run lint      # Run web-ext lint to check manifest and permissions
+npm run package   # Create dist/onboarding-helper.zip for distribution
+```
+
 ### Loading the Extension
 1. Open Chrome and navigate to `chrome://extensions/`
 2. Enable "Developer mode" (toggle in top right)
@@ -26,7 +31,7 @@ This is a Chrome extension (Manifest V3) designed to assist with Zeller's onboar
 - After modifying files, click the refresh icon on the extension card at `chrome://extensions/`
 - For manifest.json changes, you may need to remove and reload the extension
 - Open extension popup by clicking the Zeller icon in browser toolbar
-- Check console logs: Right-click popup → Inspect → Console tab
+- No automated test suite - exercise features manually on staging forms
 
 ### Debugging
 - **Popup console**: Right-click extension icon → Inspect popup
@@ -263,6 +268,14 @@ If extension behaves strangely after reload:
 - Content script runs on `<all_urls>` but features only work on allowed origins
 - No external API calls or data transmission
 - All data stored locally in Chrome storage
+
+## Coding Conventions
+
+- 2-space indentation, `const`/`let` over `var`, camelCase names
+- Treat `src/config/routes.js` as single source for onboarding personas
+- Fields arrays use ordered `{ role, name, value }` objects for Testing Library replay
+- Shared helpers expose obvious verbs (`matchRoute`, `bumpTicketCounter`)
+- Prefer template literals for URLs/composed strings; double quotes otherwise
 
 ## Common Pitfalls
 

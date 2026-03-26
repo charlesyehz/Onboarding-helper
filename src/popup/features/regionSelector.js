@@ -1,9 +1,14 @@
 import { getSelectedRegion, saveSelectedRegion } from "../../shared/storage.js";
+import { getActiveTab } from "../../shared/tabs.js";
 
 const DEFAULT_REGION = "AU";
 const REGION_FLAGS = {
   AU: "🇦🇺",
   UK: "🇬🇧",
+};
+const REGION_TO_DOMICILE = {
+  AU: "AUS",
+  UK: "GBR",
 };
 const FALLBACK_FLAG = "🌍";
 
@@ -34,6 +39,7 @@ export async function initRegionSelector(preloadedRegion = null) {
       }
       setCurrentRegionDisplay(selectedRegion);
       await saveSelectedRegion(selectedRegion);
+      await updatePageDomicile(selectedRegion);
       regionDropdown.style.display = "none";
 
       // Dispatch custom event for other components to react to region change
@@ -54,6 +60,26 @@ export async function initRegionSelector(preloadedRegion = null) {
     currentRegionSpan.textContent = region;
     if (currentRegionFlag) {
       currentRegionFlag.textContent = REGION_FLAGS[region] || FALLBACK_FLAG;
+    }
+  }
+
+  async function updatePageDomicile(region) {
+    const domicile = REGION_TO_DOMICILE[region];
+    if (!domicile) return;
+
+    const tab = await getActiveTab();
+    if (!tab?.id) return;
+
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (value) => {
+          sessionStorage.setItem("entity-domicile", JSON.stringify(value));
+        },
+        args: [domicile],
+      });
+    } catch (err) {
+      console.warn("[RegionSelector] Could not update page domicile:", err.message);
     }
   }
 }
