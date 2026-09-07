@@ -757,7 +757,71 @@ async function createUniversalWidget(
   };
 
   const BADGE_SIZE = 20;
-  const RIGHT_OFFSET = 40;
+  // Inset used when nothing else is parked at the field's right edge
+  const DEFAULT_RIGHT_INSET = 8;
+  // Space left between our badge and a neighbouring icon (1Password, LastPass)
+  const NEIGHBOUR_GAP = 6;
+  // Right-hand strip we sample when looking for those icons
+  const PROBE_START_PX = 6;
+  const PROBE_END_PX = 60;
+  const PROBE_STEP_PX = 6;
+  // Password managers decorate on focus too, so take a second look shortly after
+  const FOCUS_REMEASURE_MS = 250;
+
+  let rightOffset = DEFAULT_RIGHT_INSET;
+  let measureFrame = null;
+  let focusMeasureTimeout = null;
+
+  // Hit-test the field's right edge to find foreign icons parked there, so the
+  // badge can sit to their left instead of on top of them. Updates rightOffset.
+  const measureRightOffset = () => {
+    const rect = field.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      return;
+    }
+
+    const y = rect.top + rect.height / 2;
+    let leftmostEdge = null;
+
+    for (let dx = PROBE_START_PX; dx <= PROBE_END_PX; dx += PROBE_STEP_PX) {
+      const x = rect.right - dx;
+      if (x <= rect.left) {
+        break;
+      }
+      for (const element of document.elementsFromPoint(x, y)) {
+        // Our own badge, the field itself, and every ancestor of the field
+        // (wrapper, form, body) cover this point but are not obstacles.
+        if (element === field || container.contains(element)) {
+          continue;
+        }
+        if (element.contains(field)) {
+          continue;
+        }
+        const bounds = element.getBoundingClientRect();
+        if (leftmostEdge === null || bounds.left < leftmostEdge) {
+          leftmostEdge = bounds.left;
+        }
+        break; // the topmost hit at this x is enough
+      }
+    }
+
+    if (leftmostEdge === null) {
+      rightOffset = DEFAULT_RIGHT_INSET;
+      return;
+    }
+
+    // A page overlay spanning the whole field would otherwise shove the badge
+    // to the far left, so cap how far the probe can push us.
+    const maxOffset = Math.max(
+      DEFAULT_RIGHT_INSET,
+      Math.min(PROBE_END_PX + NEIGHBOUR_GAP, rect.width - BADGE_SIZE)
+    );
+
+    rightOffset = Math.min(
+      Math.max(rect.right - leftmostEdge + NEIGHBOUR_GAP, DEFAULT_RIGHT_INSET),
+      maxOffset
+    );
+  };
 
   const reposition = () => {
     const rect = field.getBoundingClientRect();
@@ -772,18 +836,35 @@ async function createUniversalWidget(
 
     // Position INSIDE the input field, on the right side
     const top = window.scrollY + rect.top + (rect.height - BADGE_SIZE) / 2;
-    const left = window.scrollX + rect.right - RIGHT_OFFSET - BADGE_SIZE;
+    const left = window.scrollX + rect.right - rightOffset - BADGE_SIZE;
 
     container.style.top = `${top}px`;
     container.style.left = `${left}px`;
   };
 
+  // Measuring hit-tests the page, so coalesce it to at most once per frame.
+  const scheduleRemeasure = () => {
+    if (measureFrame !== null) {
+      return;
+    }
+    measureFrame = requestAnimationFrame(() => {
+      measureFrame = null;
+      measureRightOffset();
+      reposition();
+    });
+  };
+
+  measureRightOffset();
   reposition();
 
   // Focus visibility behavior (not hover)
   const showWidget = () => {
     container.classList.add("visible");
     reposition();
+    scheduleRemeasure();
+    // Neighbours often inject their icon on focus, after our first look
+    clearTimeout(focusMeasureTimeout);
+    focusMeasureTimeout = setTimeout(scheduleRemeasure, FOCUS_REMEASURE_MS);
   };
 
   const hideWidget = () => {
@@ -798,7 +879,7 @@ async function createUniversalWidget(
   };
   field.addEventListener("blur", blurHandler);
 
-  const resizeObserver = new ResizeObserver(reposition);
+  const resizeObserver = new ResizeObserver(scheduleRemeasure);
   resizeObserver.observe(field);
 
   // Also observe the field's parent for layout changes (like validation messages)
@@ -806,9 +887,15 @@ async function createUniversalWidget(
     resizeObserver.observe(field.parentElement);
   }
 
-  // Watch for DOM mutations that might affect position (validation messages, etc.)
-  const mutationObserver = new MutationObserver(() => {
-    reposition();
+  // Watch for DOM mutations that might affect position (validation messages, or
+  // a password manager injecting its button into the form).
+  const mutationObserver = new MutationObserver((records) => {
+    // Ignore our own style writes, which land here when the observe target
+    // falls back to document.body.
+    if (records.every((record) => container.contains(record.target))) {
+      return;
+    }
+    scheduleRemeasure();
   });
 
   // Observe the field's parent for child list and subtree changes
@@ -1009,6 +1096,11 @@ async function createUniversalWidget(
     window.removeEventListener("scroll", repositionHandler, true);
     window.removeEventListener("resize", repositionHandler);
     document.removeEventListener("click", outsideClickHandler, true);
+    if (measureFrame !== null) {
+      cancelAnimationFrame(measureFrame);
+      measureFrame = null;
+    }
+    clearTimeout(focusMeasureTimeout);
     resizeObserver.disconnect();
     mutationObserver.disconnect();
     cleanupObserver?.disconnect();
